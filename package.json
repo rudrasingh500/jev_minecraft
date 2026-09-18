@@ -1,0 +1,25 @@
+{
+  "name": "jev-minecraft-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/main.js",
+    "check:jev": "node --env-file-if-exists=.env src/check-jev.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "minecraft-data": "^3.116.0",
+    "mineflayer": "^4.39.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "prismarine-block": "^1.23.0",
+    "prismarine-chunk": "^1.41.0",
+    "prismarine-viewer": "^1.33.0",
+    "socket.io": "^4.8.3",
+    "vec3": "^0.2.0"
+  }
+}
