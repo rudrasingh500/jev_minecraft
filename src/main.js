@@ -88,12 +88,12 @@ process.stdin.on('data', data => {
   if (command === 'status') log('status', { decisions, requests: jev.requests, skippedLowConfidence, paused, running });
 });
 
-async function execute(action) {
+async function execute(action, quantity = 1) {
   active = new AbortController();
   const signal = AbortSignal.any([active.signal, lifecycle.signal]);
   actions.signal = signal;
   try {
-    await runBoundedAction(() => action.run(signal), {
+    await runBoundedAction(() => action.run(signal,quantity), {
       controller: active, cancel: cancelMovement, timeoutMs: c.actionTimeout
     });
   } catch (error) {
@@ -136,14 +136,14 @@ async function loop() {
           }
         }
         const reason = reviewReason(memory,state);
-        if (reason && steering.request(structuredClone(state),candidates.map(({id,description})=>({id,description})),reason,generation,lifecycle.signal)) {
+        if (reason && steering.request(structuredClone(state),[...new Set(candidates.map(a=>a.skill))].map(id=>({id,description:`General ${id} skill; agent selects target from current world or inventory`})),reason,generation,lifecycle.signal)) {
           log('planner_review_started',{reason});
         }
         memory.plannerStatus = {pending:steering.pending,lastRequestAt:Number.isFinite(steering.lastRequestAt)?steering.lastRequestAt:null};
         state.memory = memoryContext(memory,state);
         const decisionStarted = Date.now();
         log('decision_started',{scanMs,lunaPending:steering.pending,candidates:candidates.length});
-        choice = await jev.choose(state, candidates, lifecycle.signal); apiFailures = 0;
+        choice = await jev.chooseAction(state, candidates, lifecycle.signal); apiFailures = 0;
         log('decision_received',{durationMs:Date.now()-decisionStarted,lunaPending:steering.pending});
       }
       catch (error) {
@@ -169,19 +169,19 @@ async function loop() {
       }
       let action = legal.find(a => a.id === choice.id);
       const emergency = fresh.health <= 6;
-      if (emergency) action = legal.find(a => a.id === 'flee') || legal.find(a => a.id === 'eat');
+      if (emergency) action = legal.find(a => a.skill === 'flee') || legal.find(a => a.skill === 'eat');
       if (!action) { log('stale_decision', { choice: choice.id }); continue; }
       if (!emergency && choice.confidence < c.confidence) {
         skippedLowConfidence++;
         actions.cooldowns.set(choice.id, Date.now() + 10000);
         await sleep(c.interval, undefined, { signal: lifecycle.signal }); continue;
       }
-      log('action', { lunaPending:steering.pending, id: action.id, confidence: choice.confidence, emergency, objective: fresh.objective, position: fresh.position, health: fresh.health });
+      log('action', { lunaPending:steering.pending, quantity:choice.quantity || 1, id: action.id, confidence: choice.confidence, emergency, objective: fresh.objective, position: fresh.position, health: fresh.health });
       const actionStarted = Date.now();
       let actionError;
       memory.activeAction = { id: action.id, description: action.description, confidence: choice.confidence, started: actionStarted };
       try {
-        await execute(action);
+        await execute(action,Math.min(choice.quantity || 1,action.maxQuantity || 1));
       } catch (error) {
         actionError = error;
         actions.cooldowns.set(action.id, Date.now() + 30000);
@@ -220,5 +220,5 @@ bot.once('spawn', async () => {
     } catch (error) { log('viewer_error', { message: error.message }); }
   }
   console.log('Commands: pause (after current action), resume, status, stop. Ctrl-C stops immediately.');
-  loop().catch(error => { if (!stopped) { log('fatal', { message: error.message }); stop('Controller failure'); } });
+  loop().catch(error => { if (!stopped) { log('fatal', { message: error.message, stack: error.stack }); stop('Controller failure'); } });
 });

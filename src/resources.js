@@ -1,27 +1,3 @@
-import { count } from './strategy.js';
-import { Vec3 } from 'vec3';
-
-export function woodSupply(inventory) {
-  return count(inventory, /_planks$/) + 4 * count(inventory, /_log$|_stem$/);
-}
-
-// Filter before limiting so underground matches cannot hide exposed resources.
-export function resourceTargets(bot, matcher) {
-  const feet = bot.entity.position.floored();
-  return bot.findBlocks({matching:b => matcher.test(b.name) &&
-    (b.canHarvest(null) || bot.inventory.items().some(i => b.canHarvest(i.type))), maxDistance:32,count:128})
-    .filter(p => !(p.x === feet.x && p.z === feet.z && p.y < feet.y))
-    .map(p => bot.blockAt(p)).filter(Boolean)
-    .map(block => ({block,visible:bot.canSeeBlock(block)}))
-    .filter(({block,visible}) => visible || [new Vec3(1,0,0),new Vec3(-1,0,0),new Vec3(0,0,1),new Vec3(0,0,-1)].some(d => {
-      const side = block.position.plus(d);
-      // An open, dry standing space beside a loaded resource, not a tunnel request.
-      return bot.blockAt(side)?.name === 'air' && bot.blockAt(side.offset(0,1,0))?.name === 'air' && bot.blockAt(side.offset(0,-1,0))?.boundingBox === 'block';
-    }))
-    .sort((a,b) => Number(b.visible)-Number(a.visible) || bot.entity.position.distanceTo(a.block.position)-bot.entity.position.distanceTo(b.block.position))
-    .slice(0,3);
-}
-
 export function goalRecipeGuidance(bot, state) {
   const plan = state.memory?.plan;
   if (!plan || plan.completedAt || plan.status === 'completed') return [];
