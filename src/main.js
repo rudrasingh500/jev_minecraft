@@ -9,7 +9,7 @@ import { observe } from './world.js';
 import { loadMemory, saveMemory, recordAction, rememberBlock, memoryContext } from './memory.js';
 import { createHash } from 'node:crypto';
 import { startViewer } from './viewer.js';
-import { runBoundedAction, UnresponsiveActionError } from './execution.js';
+import { runBoundedAction, UnresponsiveActionError, settledObservation } from './execution.js';
 import { LunaPlanner } from './luna.js';
 import { Steering } from './steering.js';
 import { goalRecipeGuidance } from './resources.js';
@@ -192,11 +192,17 @@ async function loop() {
         log('action_failed', { id: action.id, message: error.message });
         cancelMovement();
       }
-      const after = !stopped && bot.entity ? observe(bot, memory) : fresh;
-      log('action_outcome', recordAction(memory, action, fresh, after, actionError, choice.confidence, actionStarted));
+      const executionMs = Date.now()-actionStarted;
+      let after = fresh;
+      if (!stopped && bot.entity) {
+        memory.activeAction.phase = 'settling';
+        try {
+          after = await settledObservation(() => observe(bot,memory), {delayMs:c.interval,signal:lifecycle.signal});
+        } catch(error) { if (!stopped) throw error; }
+      }
+      log('action_outcome', {...recordAction(memory, action, fresh, after, actionError, choice.confidence, actionStarted),executionMs,settleMs:Date.now()-actionStarted-executionMs});
       memory.activeAction = null;
       saveMemory(memoryPath, memory);
-      if (!stopped) await sleep(c.interval, undefined, { signal: lifecycle.signal });
     }
     if (!stopped) stop('Decision limit reached');
   } finally { running = false; }

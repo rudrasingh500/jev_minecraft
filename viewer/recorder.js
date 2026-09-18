@@ -39,10 +39,12 @@
   };
   save.onclick = () => { recording = false; clearTimeout(timer); if (recorder?.state === 'recording') recorder.stop(); button.disabled = false; save.disabled = true; };
   window.addEventListener('beforeunload', event => { if (recording) { event.preventDefault(); event.returnValue = ''; } });
-  let dimension;
+  let dimension, polling = false;
   setInterval(async () => {
+    if (polling) return;
+    polling = true;
     try {
-      const data = await (await fetch('/state')).json();
+      const data = await (await fetch('/state', {cache:'no-store'})).json();
       const s = data.current;
       if (!s) return;
       if (dimension && dimension !== s.dimension) {
@@ -53,7 +55,7 @@
       dimension = s.dimension;
       const lines = (id, text) => { const node = panel.querySelector(id); node.textContent = text; node.style.whiteSpace = 'pre-line'; };
       const p = s.position;
-      lines('#state', `Health ${s.health?.toFixed(1)}/20 · Food ${s.food}/20 · ${s.dimension}\n${p ? `XYZ ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}` : ''}\n${s.objective}\n${data.activeAction?.description || 'Choosing next action…'}`);
+      lines('#state', `Health ${s.health?.toFixed(1)}/20 · Food ${s.food}/20 · ${s.dimension}\n${p ? `XYZ ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}` : ''}\n${s.objective}\n${data.activeAction?.phase === 'settling' ? 'Waiting for state updates: ' : ''}${data.activeAction?.description || 'Choosing next action…'}`);
       lines('#inventory', `${Object.entries(s.inventory || {}).sort(([a],[b]) => a.localeCompare(b)).map(([name,count]) => `${name} × ${count}`).join('\n') || 'Empty'}\n\nHeld: ${s.heldItem || 'nothing'}\nArmor: ${(s.equipped || []).join(', ') || 'none'}`);
       const plan = data.plan;
       const status = plan?.status === 'completed' ? 'Completed (verified)' : plan?.acknowledgement?.status === 'pursuing' ? 'Established by Jev' : plan?.acknowledgement?.status || 'Proposed; awaiting Jev';
@@ -61,6 +63,6 @@
       lines('#recent', [...(data.recent || [])].reverse().map(a => `${a.result} · ${a.description || a.action} (${Math.round((a.confidence || 0)*100)}%)${a.error ? `\n${a.error}` : ''}\n${Object.entries(a.inventoryDelta || {}).map(([name,n]) => `${name} ${n>0?'+':''}${n}`).join(', ')}`).join('\n\n') || 'No completed actions yet');
     } catch {
       panel.querySelector('#state').textContent = 'Bot disconnected. You can stop and download the recording.';
-    }
-  }, 1000);
+    } finally { polling = false; }
+  }, 250);
 })();

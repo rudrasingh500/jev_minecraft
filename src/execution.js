@@ -26,3 +26,13 @@ export async function runBoundedAction(run, { controller, cancel, timeoutMs, gra
     throw reason;
   } finally { clearTimeout(timer); clearTimeout(graceTimer); }
 }
+
+// Mineflayer operation completion can precede inventory/pickup updates.
+// Reuse the decision interval before sampling outcomes; this is a settling
+// window, not proof that the server has acknowledged every effect.
+export async function settledObservation(observe, { delayMs, signal }) {
+  const { setTimeout: sleep } = await import('node:timers/promises');
+  await sleep(delayMs, undefined, { signal });
+  signal?.throwIfAborted();
+  return observe();
+}
