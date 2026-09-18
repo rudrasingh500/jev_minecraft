@@ -5,12 +5,13 @@ export class Steering {
   }
   request(state, candidates, reason, epoch, signal, now = Date.now()) {
     if (!this.planner || this.pending || this.result || now-this.lastRequestAt < this.intervalMs) return false;
-    this.pending = true; this.lastRequestAt = now;
+    this.pending = true; this.lastRequestAt = now; this.reason = reason;
     Promise.resolve().then(() => this.planner.propose(state, candidates, reason, signal)).then(
       proposal => { this.result = { proposal, reason, epoch }; },
       error => { this.result = { error, reason, epoch }; }
     ).finally(() => { this.pending = false; });
     return true;
   }
+  status() { return {pending:this.pending,adviceReady:!!this.result,reason:this.reason || null,lastRequestAt:Number.isFinite(this.lastRequestAt)?this.lastRequestAt:null}; }
   take() { const result = this.result; this.result = null; return result; }
 }

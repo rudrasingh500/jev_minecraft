@@ -44,7 +44,11 @@ export function executionContext(state, candidates) {
   if (readyForTable) needed.add('crafting_table');
   const recent = (memory.recentActions || []).slice(-4).map(({action,result,error,inventoryDelta,healthDelta,from,to}) =>
     ({action,result,error,inventoryDelta,healthDelta,from,to}));
-  return {...live, goalRecipeGuidance:finished ? [] : live.goalRecipeGuidance, microgoal,
+  return {...live, executionPolicy:{
+      mode:!microgoal || finished || microgoal.assessment==='blocked' ? 'self_directed' : 'microgoal_guided',
+      plannerPending:!!state.steering?.pending,
+      continuity:'Keep taking useful actions toward Beat the Ender Dragon while advice is pending. Continue useful current work; new advice may refine the next action, not restart preparation. Never wait for Luna.'
+    }, goalRecipeGuidance:finished ? [] : live.goalRecipeGuidance, microgoal,
     tacticalMemory:{
       recentActions:recent,
       failures:(memory.failures || []).filter(f=>ids.has(f.action)).slice(-3),

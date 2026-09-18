@@ -49,3 +49,31 @@ test('actual Luna client can wait on a response while Jev decisions and actions 
  assert.equal(actions,3);assert.equal(steering.pending,true);assert.equal(steering.take(),null);
  release();await setImmediate();assert.deepEqual(steering.take().proposal,{});
 });
+
+test('full skill and target decisions execute with no initial microgoal while Luna is pending',async()=>{
+ const {JevClient}=await import('../src/jev.js');
+ const {executionContext}=await import('../src/context.js');
+ let finish;const steering=new Steering({propose:()=>new Promise(resolve=>finish=resolve)});
+ steering.request({},[],'initial_microgoal',1);await setImmediate();
+ let executed=0;
+ const candidates=[{id:'mine_1_2_3',skill:'mine',description:'Mine visible stone',run:async()=>{executed++;}}];
+ const jev=new JevClient({key:'test',fetchImpl:async(url,opts)=>{
+  const body=JSON.parse(opts.body);
+  assert.equal(body.state.executionPolicy.mode,'self_directed');
+  assert.equal(body.state.executionPolicy.plannerPending,true);
+  const choice=Object.keys(body.questions.action.criteria)[0];
+  return Response.json({answers:{action:{type:'choice',choice,confidence:0.9}}});
+ }});
+ for(let i=0;i<3;i++) {
+  const choice=await jev.chooseAction({steering:steering.status()},candidates);
+  await candidates.find(a=>a.id===choice.id).run();
+ }
+ assert.equal(executed,3);assert.equal(steering.pending,true);
+ const proposal={description:'Craft stone pickaxe',steps:['Use the collected stone'],completion:[{kind:'inventory',key:'stone_pickaxe',target:1}]};
+ finish(proposal);await setImmediate();
+ assert.equal(steering.status().adviceReady,true);
+ const advice=steering.take();
+ const context=executionContext({inventory:{cobblestone:3},memory:{plan:advice.proposal},steering:steering.status()},candidates);
+ assert.equal(context.executionPolicy.mode,'microgoal_guided');
+ assert.equal(context.inventory.cobblestone,3);assert.equal(executed,3);
+});

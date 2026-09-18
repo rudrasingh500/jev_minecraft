@@ -12,6 +12,7 @@ import { startViewer } from './viewer.js';
 import { runBoundedAction, UnresponsiveActionError } from './execution.js';
 import { LunaPlanner } from './luna.js';
 import { Steering } from './steering.js';
+import { goalRecipeGuidance } from './resources.js';
 import { reviewReason, validateMicrogoal, adoptMicrogoal, completed } from './microgoals.js';
 
 const { pathfinder, Movements } = pathfinderPackage;
@@ -139,8 +140,11 @@ async function loop() {
         if (reason && steering.request(structuredClone(state),[...new Set(candidates.map(a=>a.skill))].map(id=>({id,description:`General ${id} skill; agent selects target from current world or inventory`})),reason,generation,lifecycle.signal)) {
           log('planner_review_started',{reason});
         }
-        memory.plannerStatus = {pending:steering.pending,lastRequestAt:Number.isFinite(steering.lastRequestAt)?steering.lastRequestAt:null};
+        memory.plannerStatus = steering.status();
+        state.steering = memory.plannerStatus;
         state.memory = memoryContext(memory,state);
+        // Advice can arrive after candidate generation; refresh ingredients for the new goal.
+        state.goalRecipeGuidance = goalRecipeGuidance(bot,state);
         const decisionStarted = Date.now();
         log('decision_started',{scanMs,lunaPending:steering.pending,candidates:candidates.length});
         choice = await jev.chooseAction(state, candidates, lifecycle.signal); apiFailures = 0;
@@ -214,7 +218,7 @@ bot.once('spawn', async () => {
   log('spawn', { version: bot.version, host: c.host, port: c.port, logPath });
   if (c.viewer) {
     try {
-      viewer = await startViewer(bot, { port: c.viewerPort, memory, plannerStatus: () => ({pending:steering.pending,lastRequestAt:Number.isFinite(steering.lastRequestAt)?steering.lastRequestAt:null}) });
+      viewer = await startViewer(bot, { port: c.viewerPort, memory, plannerStatus: () => steering.status() });
       if (stopped) viewer.close();
       else console.log(`Watch and record: http://localhost:${c.viewerPort}`);
     } catch (error) { log('viewer_error', { message: error.message }); }
