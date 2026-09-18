@@ -18,7 +18,7 @@ test('skills expose non-progression recipes and blocks regardless of stockpile q
    assert.equal(useExtraInfo({...block,position:new Vec3(0,63,0)}),false);
    return matching(block) && useExtraInfo(block)?[pos]:[];
   },blockAt:p=>p.equals(pos)?block:p.y===63?{name:'stone',boundingBox:'block'}:{name:'air',boundingBox:'empty'}};
- const actions=new Actions(bot,{visits:{},failures:{}}).candidates({dimension:'overworld',inventory:{oak_log:64},entities:[{id:9,name:'enderman',position:{x:3,y:64,z:0},distance:3}],memory:{},equipped:[]});
+ const actions=new Actions(bot,{visits:{},failures:{}}).candidates({position:{x:0,y:64,z:0},dimension:'overworld',inventory:{oak_log:64},entities:[{id:9,name:'enderman',position:{x:3,y:64,z:0},distance:3}],memory:{},equipped:[]});
  assert.ok(actions.some(a=>a.id==='craft_oak_button'));
  assert.ok(actions.some(a=>a.skill==='mine'));
  assert.ok(actions.some(a=>a.id==='fight_9'));

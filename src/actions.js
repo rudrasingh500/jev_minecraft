@@ -2,6 +2,7 @@ import pathfinderPackage from 'mineflayer-pathfinder';
 import vec3Package from 'vec3';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { navigate } from './navigation.js';
+import { explorationOptions, loopSummary } from './exploration.js';
 import { goalRecipeGuidance } from './resources.js';
 const { goals } = pathfinderPackage;
 const { Vec3 } = vec3Package;
@@ -154,9 +155,14 @@ export class Actions {
     const add = (skill, target, description, run, maxQuantity = 1) => {
       const id = `${skill}_${target}`;
       const retry = this.memory.failures?.[`${s.dimension}:${id}`]?.retryAfter || 0;
-      if (Math.max(this.cooldowns.get(id) || 0,retry) <= Date.now()) out.push({id,skill,description,run,maxQuantity});
+      const interactionState=skill==='interact' ? `${bot.blockAt(new Vec3(...String(target).split('_').map(Number)))?.stateId}:${bot.heldItem?.name || 'empty'}` : undefined;
+      const repeats=(this.memory.recent || []).filter(a=>a.dimension===s.dimension && a.action===id && a.interactionState===interactionState && Date.now()-a.started<60000 && !Object.keys(a.inventoryDelta || {}).length);
+      if(skill==='interact' && repeats.length>=2)return false;
+      if (Math.max(this.cooldowns.get(id) || 0,retry) <= Date.now()) {out.push({id,skill,description,run,maxQuantity,interactionState});return true;}
+      return false;
     };
     s.goalRecipeGuidance = goalRecipeGuidance(bot,s);
+    s.exploration = loopSummary(this.memory,s.dimension);
     const table = this.block('crafting_table');
     // Recipe availability is a game mechanic, not a progression wish list.
     for (const item of bot.registry.itemsArray) {
@@ -198,8 +204,9 @@ export class Actions {
     const seen=new Set();
     for (const p of blocks) {
       const b=bot.blockAt(p);if (!b) continue;
-      if (!seen.has(b.name) && b.diggable && (b.canHarvest(null) || bot.inventory.items().some(i=>b.canHarvest(i.type)))) add('mine',`${p.x}_${p.y}_${p.z}`,`Mine ${b.name} at ${p}`,()=>this.mine(p));
-      seen.add(b.name);
+      if (!seen.has(b.name) && b.diggable && (b.canHarvest(null) || bot.inventory.items().some(i=>b.canHarvest(i.type)))) {
+        if(add('mine',`${p.x}_${p.y}_${p.z}`,`Mine ${b.name} at ${p}`,()=>this.mine(p)))seen.add(b.name);
+      }
       add('interact',`${p.x}_${p.y}_${p.z}`,`Activate ${b.name} at ${p} using the currently held item`,async()=>{await this.near(p,3);const block=bot.blockAt(p);if(!block)throw new Error('Target unloaded');await bot.activateBlock(block,new Vec3(0,1,0));});
     }
     for (const e of s.entities) {
@@ -217,11 +224,9 @@ export class Actions {
       const p=place.position;
       add('move',`${place.name}_${p.x}_${p.y}_${p.z}`,`Move to observed ${place.name} at ${JSON.stringify(p)}; may be stale`,()=>this.near(p,place.name.includes('portal')?0:2));
     }
-    for(const [label,dx,dz] of [['north',0,-12],['east',12,0],['south',0,12],['west',-12,0]]) {
-      const key=`${s.dimension}:${Math.floor((feet.x+dx)/16)},${Math.floor((feet.z+dz)/16)}`;
-      add('explore',label,`Explore ${label} through existing terrain; previous visits ${this.memory.visits[key] || 0}`,async()=>{
-        this.memory.visits[key]=(this.memory.visits[key] || 0)+1;
-        await navigate(bot,new goals.GoalNearXZ(feet.x+dx,feet.z+dz,3));
+    for(const {label,target,revisits} of explorationOptions(this.memory,s)) {
+      add('explore',label,`Explore ${label} toward (${target.x}, ${target.z}) through existing terrain; recent arrival matches ${revisits}`,async()=>{
+        await navigate(bot,new goals.GoalNearXZ(target.x,target.z,3));
       });
     }
     if(this.block('furnace')) {

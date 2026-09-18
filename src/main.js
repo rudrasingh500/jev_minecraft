@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { startViewer } from './viewer.js';
 import { runBoundedAction, UnresponsiveActionError, settledObservation } from './execution.js';
 import { LunaPlanner } from './luna.js';
+import { installDeathRecovery } from './recovery.js';
 import { Steering } from './steering.js';
 import { goalRecipeGuidance } from './resources.js';
 import { reviewReason, validateMicrogoal, adoptMicrogoal, completed } from './microgoals.js';
@@ -33,7 +34,7 @@ let decisions = 0;
 let skippedLowConfidence = 0;
 const bot = mineflayer.createBot({
   host: c.host, port: c.port, username: c.username, auth: c.auth,
-  version: c.version, profilesFolder: '.auth', respawn: false, logErrors: false
+  version: c.version, profilesFolder: '.auth', respawn: true, logErrors: false
 });
 bot.loadPlugin(pathfinder);
 const actions = new Actions(bot, memory);
@@ -64,7 +65,8 @@ const runTimer = setTimeout(() => stop('Run time limit reached'), c.minutes * 60
 bot.on('error', error => { log('connection_error', { message: error.message || error.code || 'Connection failed' }); stop('Connection error; verify Minecraft is open to LAN and MC_PORT matches'); });
 bot.on('kicked', reason => { log('kicked', { reason: String(reason) }); stop('Server rejected the connection'); });
 bot.on('end', () => stop('Disconnected'));
-bot.on('death', () => stop('Bot died; run ended. Restart for a new attempt.'));
+const recovery = installDeathRecovery(bot,{memory,log,isStopped:()=>stopped,
+  invalidate:()=>{generation++;},cancel:()=>{active?.abort(new Error('Bot died'));cancelMovement();}});
 bot.on('entityDead', entity => {
   if (entity.name === 'ender_dragon' && String(bot.game.dimension).includes('end')) {
     log('dragon_death_observed', { note: 'Dragon death observed; this does not attribute the kill or certify a speedrun.' });
@@ -109,7 +111,7 @@ async function loop() {
   let apiFailures = 0;
   try {
     while (!stopped && decisions < c.decisions) {
-      if (paused) { await sleep(300, undefined, { signal: lifecycle.signal }); continue; }
+      if (paused || recovery.waiting) { await sleep(300, undefined, { signal: lifecycle.signal }); continue; }
       const scanStarted = Date.now();
       const state = observe(bot, memory);
       const candidates = actions.candidates(state);
@@ -126,7 +128,7 @@ async function loop() {
         const advice = steering.take();
         if (advice) {
           if (advice.error) log('planner_advice_unavailable',{message:advice.error.message});
-          else if (advice.epoch !== generation) log('planner_advice_discarded',{reason:'dimension changed while planning'});
+          else if (advice.epoch !== generation) log('planner_advice_discarded',{reason:'world or life changed while planning'});
           else {
             try {
               validateMicrogoal(advice.proposal, state, bot.registry);
@@ -157,7 +159,7 @@ async function loop() {
         await sleep(2000, undefined, { signal: lifecycle.signal }); continue;
       }
       decisions++;
-      if (stopped || paused || epoch !== generation) continue;
+      if (stopped || paused || recovery.waiting || epoch !== generation) continue;
       // Rebuild after inference: entities, blocks, recipes and hunger may change.
       const fresh = observe(bot, memory);
       const legal = actions.candidates(fresh);
@@ -194,10 +196,10 @@ async function loop() {
       }
       const executionMs = Date.now()-actionStarted;
       let after = fresh;
-      if (!stopped && bot.entity) {
+      if (!stopped && !recovery.waiting && epoch === generation && bot.entity) {
         memory.activeAction.phase = 'settling';
         try {
-          after = await settledObservation(() => observe(bot,memory), {delayMs:c.interval,signal:lifecycle.signal});
+          after = await settledObservation(() => !recovery.waiting && epoch === generation ? observe(bot,memory) : fresh, {delayMs:c.interval,signal:lifecycle.signal});
         } catch(error) { if (!stopped) throw error; }
       }
       log('action_outcome', {...recordAction(memory, action, fresh, after, actionError, choice.confidence, actionStarted),executionMs,settleMs:Date.now()-actionStarted-executionMs});

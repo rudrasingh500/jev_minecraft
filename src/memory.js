@@ -47,7 +47,7 @@ export function recordAction(memory, action, before, after, error, confidence, s
     const delta = (after.inventory[name] || 0) - (before.inventory[name] || 0);
     if (delta) inventoryDelta[name] = delta;
   }
-  const entry = { action: action.id, description: action.description, dimension: before.dimension, from: before.position, to: after.position,
+  const entry = { action: action.id, interactionState:action.interactionState, description: action.description, dimension: before.dimension, from: before.position, to: after.position,
     started, durationMs: Date.now()-started, confidence, result: error ? 'failed' : 'completed', error: error?.message,
     inventoryDelta, healthDelta: after.health-before.health, objective: before.objective };
   memory.recent.push(entry); memory.recent = memory.recent.slice(-40);

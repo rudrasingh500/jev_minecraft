@@ -190,7 +190,7 @@ The full run requires a live Minecraft world, valid credentials, and the configu
 - Random seeds and unusual terrain can strand the bot or make required structures hard to find.
 - The viewer is a reconstructed view, not a pixel-identical Minecraft client recording.
 - The viewer's renderer maps native 26.1 blocks to 1.21.4 display assets; unsupported blocks may render as stone or air.
-- Death ends the current attempt; Jev does not silently respawn and continue.
+- Death cancels the current action and invalidates outstanding decisions. The bot stays connected and automatically respawns, then re-observes inventory and requests fresh background advice. The attempt is logged as a death; the overall run time and decision limits still apply.
 - The bot is not designed or authorized for public servers without their owner's permission.
 
 ## References
@@ -205,3 +205,5 @@ The full run requires a live Minecraft world, valid credentials, and the configu
 ## License
 
 No license has been added yet. Until a license is included, assume the repository is all rights reserved.
+
+Exploration uses recent actual arrival positions to avoid reversing into visited areas when an unseen direction is available. If all directions were visited, least-revisited options remain available; explicit movement to remembered targets and fleeing are unaffected. Jev receives a compact loop summary. Repeated interactions with unchanged block/held-item state and no inventory change are temporarily suppressed after two attempts. Navigation checks that its requested goal was actually reached.
