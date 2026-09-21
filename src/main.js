@@ -10,7 +10,7 @@ import { loadMemory, saveMemory, recordAction, rememberBlock, memoryContext } fr
 import { createHash } from 'node:crypto';
 import { startViewer } from './viewer.js';
 import { runBoundedAction, UnresponsiveActionError, settledObservation } from './execution.js';
-import { LunaPlanner } from './luna.js';
+import { AdvisorPlanner } from './advisor.js';
 import { installDeathRecovery } from './recovery.js';
 import { Steering } from './steering.js';
 import { goalRecipeGuidance } from './resources.js';
@@ -19,7 +19,7 @@ import { reviewReason, validateMicrogoal, adoptMicrogoal, completed } from './mi
 const { pathfinder, Movements } = pathfinderPackage;
 const c = config();
 const jev = new JevClient(c);
-const planner = c.openaiKey ? new LunaPlanner({ key: c.openaiKey }) : null;
+const planner = c.openaiKey ? new AdvisorPlanner({ key: c.openaiKey }) : null;
 const steering = new Steering(planner);
 mkdirSync('logs', { recursive: true });
 const logPath = `logs/run-${new Date().toISOString().replaceAll(':', '-')}.jsonl`;
@@ -148,9 +148,9 @@ async function loop() {
         // Advice can arrive after candidate generation; refresh ingredients for the new goal.
         state.goalRecipeGuidance = goalRecipeGuidance(bot,state);
         const decisionStarted = Date.now();
-        log('decision_started',{scanMs,lunaPending:steering.pending,candidates:candidates.length});
+        log('decision_started',{scanMs,advisorPending:steering.pending,candidates:candidates.length});
         choice = await jev.chooseAction(state, candidates, lifecycle.signal); apiFailures = 0;
-        log('decision_received',{durationMs:Date.now()-decisionStarted,lunaPending:steering.pending});
+        log('decision_received',{durationMs:Date.now()-decisionStarted,advisorPending:steering.pending});
       }
       catch (error) {
         if (stopped) break;
@@ -182,7 +182,7 @@ async function loop() {
         actions.cooldowns.set(choice.id, Date.now() + 10000);
         await sleep(c.interval, undefined, { signal: lifecycle.signal }); continue;
       }
-      log('action', { lunaPending:steering.pending, quantity:choice.quantity || 1, id: action.id, confidence: choice.confidence, emergency, objective: fresh.objective, position: fresh.position, health: fresh.health });
+      log('action', { advisorPending:steering.pending, quantity:choice.quantity || 1, id: action.id, confidence: choice.confidence, emergency, objective: fresh.objective, position: fresh.position, health: fresh.health });
       const actionStarted = Date.now();
       let actionError;
       memory.activeAction = { id: action.id, description: action.description, confidence: choice.confidence, started: actionStarted };

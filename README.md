@@ -4,7 +4,7 @@
 
 Jev is a personal side project exploring autonomous game agents. It connects to a Minecraft Java world through [Mineflayer](https://github.com/PrismarineJS/mineflayer), observes the world and its own state, chooses from a menu of implemented actions, and executes those actions without human control.
 
-The bot exposes general Minecraft interaction skills for the agent to compose toward its objective. It does not contain a fixed progression script; the current controller is deliberately open-ended and experimental. The project also includes a local browser viewer, persistent world memory, structured run logs, and an optional GPT-5.6 Luna planner for longer-term milestones.
+The bot exposes general Minecraft interaction skills for the agent to compose toward its objective. It does not contain a fixed progression script; the current controller is deliberately open-ended and experimental. The project also includes a local browser viewer, persistent world memory, structured run logs, and an optional GPT-5.6 advisor planner for longer-term milestones.
 
 **Status: experimental.** This is not a verified autonomous speedrunner. A run can get stuck, die, or fail to finish the game. The project is best treated as a research toy and an evolving side project.
 
@@ -16,7 +16,7 @@ The bot exposes general Minecraft interaction skills for the agent to compose to
 - Uses pathfinding, inventory checks, safety checks, cooldowns, and action timeouts.
 - Lets the agent compose generic skills instead of following a hard-coded resource or portal route.
 - Persists landmarks, routes, milestones, failures, and action outcomes between runs.
-- Optionally asks GPT-5.6 Luna to suggest meaningful multi-action milestones.
+- Optionally asks GPT-5.6 advisor to suggest meaningful multi-action milestones.
 - Serves a reconstructed first-person view and live bot state at `http://localhost:3007`.
 - Records JSONL logs without writing API keys to disk.
 
@@ -30,7 +30,7 @@ Jev does not generate or execute code, use creative mode, issue chat commands, u
 - Minecraft Java Edition
 - A Minecraft world opened to LAN, or a server the bot is allowed to join
 - A `TYPESAFE_API_KEY` for action decisions
-- An `OPENAI_API_KEY` if you want the optional Luna planner
+- An `OPENAI_API_KEY` if you want the optional advisor planner
 
 The bot itself is a Node.js process, so the main workflow works on **Windows, macOS, and Linux**. On Windows, use PowerShell or Command Prompt with the commands below. The included `start.command` is only a convenience launcher for zsh-compatible shells; it is not required.
 
@@ -101,7 +101,7 @@ All runtime settings are read from `.env`. The complete template is in [.env.exa
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `TYPESAFE_API_KEY` | — | Required for Jev action decisions |
-| `OPENAI_API_KEY` | — | Enables the optional Luna planner |
+| `OPENAI_API_KEY` | — | Enables the optional advisor planner |
 | `JEV_MODEL` | `jev-latest` | TypeSafe model used for action decisions |
 | `MC_HOST` | `localhost` | Minecraft server address |
 | `MC_PORT` | `25565` | Minecraft server port |
@@ -144,7 +144,7 @@ Mechanics remain bounded: navigation cannot dig, mining avoids underfoot and adj
 ```text
 src/main.js       Run lifecycle, serialized decision loop, and shutdown
 src/jev.js        TypeSafe action-decision client
-src/luna.js       Optional GPT-5.6 Luna milestone planner
+src/advisor.js    Optional GPT-5.6 advisor milestone planner
 src/strategy.js   Fixed final objective
 src/actions.js    Generic skills, grounded targets, and execution
 src/world.js      Minecraft observation and state extraction
@@ -155,7 +155,7 @@ test/             Offline Node.js test suite
 viewer/           Browser recording controls
 ```
 
-Jev owns the immediate skill, target, and quantity choices. Luna, when enabled, works in the background and proposes a single strategic microgoal. Proposals are validated against the latest observed state before they are adopted. A planner failure does not replace the immediate action loop.
+Jev owns the immediate skill, target, and quantity choices. The advisor, when enabled, works in the background and proposes a single strategic microgoal. Proposals are validated against the latest observed state before they are adopted. A planner failure does not replace the immediate action loop.
 
 ## Logs and saved state
 

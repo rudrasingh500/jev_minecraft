@@ -28,7 +28,7 @@ export function compactRequest(request, maxBytes = 24000) {
   return result;
 }
 
-// Jev executes the current tactic; Luna alone receives the strategic memory packet.
+// Jev executes the current tactic; the advisor alone receives the strategic memory packet.
 export function executionContext(state, candidates) {
   const { memory = {}, recentActions: unused, ...live } = state;
   const plan = memory.plan;
@@ -47,7 +47,7 @@ export function executionContext(state, candidates) {
   return {...live, executionPolicy:{
       mode:!microgoal || finished || microgoal.assessment==='blocked' ? 'self_directed' : 'microgoal_guided',
       plannerPending:!!state.steering?.pending,
-      continuity:'Keep taking useful actions toward Beat the Ender Dragon while advice is pending. Continue useful current work; new advice may refine the next action, not restart preparation. Never wait for Luna.'
+      continuity:'Keep taking useful actions toward Beat the Ender Dragon while advice is pending. Continue useful current work; new advice may refine the next action, not restart preparation. Never wait for the advisor.'
     }, goalRecipeGuidance:finished ? [] : live.goalRecipeGuidance, microgoal,
     tacticalMemory:{
       recentActions:recent,

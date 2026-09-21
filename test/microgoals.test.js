@@ -1,17 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LunaPlanner } from '../src/luna.js';
+import { AdvisorPlanner } from '../src/advisor.js';
 import { completed, reviewReason, validateMicrogoal, adoptMicrogoal } from '../src/microgoals.js';
 const state={dimension:'overworld',position:{x:0,y:65,z:0},inventory:{},equipped:[],observedBlocks:[],objective:'Beat the Ender Dragon'};
 const proposal={description:'Acquire an iron pickaxe',rationale:'Unlock harder resources',steps:['Gather and smelt iron','Craft a pickaxe'],completion:[{kind:'inventory',key:'iron_pickaxe',target:1}]};
 const registry={itemsByName:{iron_pickaxe:{}},blocksByName:{}};
-test('Luna microgoal persists across turns and replans on measured completion',()=>{
+test('advisor microgoal persists across turns and replans on measured completion',()=>{
  const memory={};adoptMicrogoal(memory,validateMicrogoal(proposal,state,registry),state,'initial_microgoal');
  memory.plan.actionsTaken=20;
  assert.equal(reviewReason(memory,state),null);
  assert.equal(reviewReason(memory,{...state,inventory:{iron_pickaxe:1}},memory.plan.selectedAt+120001),'microgoal_completed');
  assert.equal(memory.plan.objective,'Beat the Ender Dragon');
- assert.equal(memory.plan.selectedBy,'gpt-5.6-luna');
+ assert.equal(memory.plan.selectedBy,'advisor');
 });
 test('planner gives Jev recovery time and rate-limits completion reviews',()=>{
  const memory={recent:[]};adoptMicrogoal(memory,proposal,state,'initial_microgoal');
@@ -47,8 +47,8 @@ test('rejects unknown and already satisfied predicates and requires all conditio
  assert.equal(completed(plan,{...state,inventory:{iron_pickaxe:1}}),false);
  assert.equal(completed(plan,{...state,inventory:{iron_pickaxe:1},dimension:'the_nether'}),true);
 });
-test('Luna uses the requested model and strict structured responses without storing secrets in input',async()=>{
- const planner=new LunaPlanner({key:'test-only',fetchImpl:async(url,options)=>{
+test('advisor uses the requested model and strict structured responses without storing secrets in input',async()=>{
+ const planner=new AdvisorPlanner({key:'test-only',fetchImpl:async(url,options)=>{
   assert.equal(url,'https://api.openai.com/v1/responses');
   const body=JSON.parse(options.body);
   assert.equal(body.model,'gpt-5.6-luna');assert.equal(body.store,false);
@@ -58,10 +58,10 @@ test('Luna uses the requested model and strict structured responses without stor
  assert.deepEqual(await planner.propose(state,[],'initial_microgoal'),proposal);
  assert.equal(planner.requests,1);
 });
-test('Luna failures expose status only, and incomplete responses are rejected',async()=>{
- const failed=new LunaPlanner({key:'test-only',fetchImpl:async()=>new Response('secret echo',{status:401})});
- await assert.rejects(failed.propose(state,[],'initial'),error=>error.message==='Luna HTTP 401');
- const incomplete=new LunaPlanner({key:'test-only',fetchImpl:async()=>Response.json({status:'incomplete'})});
+test('advisor failures expose status only, and incomplete responses are rejected',async()=>{
+ const failed=new AdvisorPlanner({key:'test-only',fetchImpl:async()=>new Response('secret echo',{status:401})});
+ await assert.rejects(failed.propose(state,[],'initial'),error=>error.message==='Advisor HTTP 401');
+ const incomplete=new AdvisorPlanner({key:'test-only',fetchImpl:async()=>Response.json({status:'incomplete'})});
  await assert.rejects(incomplete.propose(state,[],'initial'),/did not complete/);
 });
 

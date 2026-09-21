@@ -10,7 +10,7 @@ test('stone pickaxe guidance identifies cobblestone rather than more wood with s
  assert.deepEqual(guidance[0].recipe.missing,[{name:'cobblestone',required:3,held:0}]);
 });
 test('wandering cannot reset the microgoal stall clock',()=>{
- const memory={plan:{completion:[{}],selectedBy:'gpt-5.6-luna',actionsTaken:0,failures:0,noProgress:0,lastProgressAt:1}};
+ const memory={plan:{completion:[{}],selectedBy:'advisor',actionsTaken:0,failures:0,noProgress:0,lastProgressAt:1}};
  advancePlan(memory,{result:'completed',from:{x:0,y:60,z:0},to:{x:20,y:60,z:0},inventoryDelta:{},healthDelta:0});
  assert.equal(memory.plan.lastProgressAt,1);assert.equal(memory.plan.noProgress,1);
 });

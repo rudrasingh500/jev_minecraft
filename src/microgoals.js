@@ -18,7 +18,7 @@ export function validateMicrogoal(proposal, state, registry) {
   if (!proposal || typeof proposal.description !== 'string' || !proposal.description.trim() || proposal.description.length > 500 ||
       typeof proposal.rationale !== 'string' || proposal.rationale.length > 1500 ||
       !Array.isArray(proposal.steps) || !proposal.steps.length || proposal.steps.length > 6 || proposal.steps.some(s => typeof s !== 'string' || s.length > 500) ||
-      !Array.isArray(proposal.completion) || !proposal.completion.length || proposal.completion.length > 4) throw new Error('Invalid Luna microgoal');
+      !Array.isArray(proposal.completion) || !proposal.completion.length || proposal.completion.length > 4) throw new Error('Invalid advisor microgoal');
   if (proposal.completion.some(c => c.kind === 'travel_distance') || proposal.completion.every(c => c.kind === 'inventory' && ['gravel','dirt','cobblestone','cobbled_deepslate','netherrack'].includes(String(c.key).replace(/^minecraft:/, '')))) throw new Error('Microgoal must produce useful readiness or discovery, not travel or arbitrary filler blocks');
   for (const c of proposal.completion) {
     if (!Number.isInteger(c.target) || typeof c.key !== 'string') throw new Error('Invalid microgoal completion predicate');
@@ -29,12 +29,12 @@ export function validateMicrogoal(proposal, state, registry) {
       c.kind === 'travel_distance' ? c.key === '' && c.target >= 1 && c.target <= 64 : false;
     if (!valid) throw new Error('Unsupported microgoal completion predicate');
   }
-  if (completed({...proposal,origin:state.position,dimension:state.dimension},state)) throw new Error('Luna proposed an already-completed microgoal');
+  if (completed({...proposal,origin:state.position,dimension:state.dimension},state)) throw new Error('Advisor proposed an already-completed microgoal');
   return proposal;
 }
 export function reviewReason(memory, state, now = Date.now()) {
   const p = memory.plan;
-  if (!p?.completion || p.selectedBy !== 'gpt-5.6-luna') return 'initial_microgoal';
+  if (!p?.completion || !['advisor','gpt-5.6-luna'].includes(p.selectedBy)) return 'initial_microgoal';
   const age = now-p.selectedAt;
   if (p.completedAt || completed(p,state)) {
     p.status = 'completed';
@@ -59,6 +59,6 @@ export function adoptMicrogoal(memory, proposal, state, reason) {
     memory.planHistory.push({...memory.plan,endedAt:Date.now(),outcome:reason});
     memory.planHistory = memory.planHistory.slice(-8);
   }
-  memory.plan = { ...proposal, id:'microgoal-'+Date.now(), objective:RUN_OBJECTIVE, selectedBy:'gpt-5.6-luna',
+  memory.plan = { ...proposal, id:'microgoal-'+Date.now(), objective:RUN_OBJECTIVE, selectedBy:'advisor',
     dimension:state.dimension,origin:{...state.position},startInventory:{...state.inventory},selectedAt:Date.now(),lastProgressAt:Date.now(),actionsTaken:0,failures:0,noProgress:0,status:'proposed',acknowledgement:null };
 }

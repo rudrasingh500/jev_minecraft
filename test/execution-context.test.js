@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { executionContext } from '../src/context.js';
 import { JevClient } from '../src/jev.js';
-import { LunaPlanner } from '../src/luna.js';
+import { AdvisorPlanner } from '../src/advisor.js';
 const state={objective:'Beat the Ender Dragon',inventory:{wooden_pickaxe:1,spruce_log:14,stick:2},health:8,entities:[{name:'zombie',distance:3}],
  goalRecipeGuidance:[{target:'stone_pickaxe',recipe:{requiresTable:true,missing:[{name:'cobblestone',required:3,held:0}]}}],
  memory:{plan:{id:'current',description:'Craft a stone pickaxe',steps:['Mine stone','Craft upgrade'],completion:[{kind:'inventory',key:'stone_pickaxe',target:1}],selectedAt:1,startInventory:{},actionsTaken:20},
@@ -38,8 +38,8 @@ test('completed and missing microgoals do not leave active steps in execution co
  assert.deepEqual(projected.goalRecipeGuidance,[]);
  assert.equal(executionContext({inventory:{}},candidates).microgoal,null);
 });
-test('Luna continues receiving strategic history that is removed from Jev',async()=>{
- const planner=new LunaPlanner({key:'test',fetchImpl:async(url,opts)=>{
+test('advisor continues receiving strategic history that is removed from Jev',async()=>{
+ const planner=new AdvisorPlanner({key:'test',fetchImpl:async(url,opts)=>{
   const input=JSON.parse(JSON.parse(opts.body).input);
   assert.equal(input.state.memory.planHistory[0].description,'OLD_WOOD_GOAL');
   assert.equal(input.state.memory.lessons[0].tactic,'OLD_WOOD_LESSON');

@@ -32,7 +32,7 @@ export function advancePlan(memory, entry) {
   if (!memory.plan) return;
   memory.plan.actionsTaken++;
   if (entry.result === 'failed') memory.plan.failures++;
-  else if (memory.plan.selectedBy === 'gpt-5.6-luna') memory.plan.failures = 0;
+  else if (['advisor','gpt-5.6-luna'].includes(memory.plan.selectedBy)) memory.plan.failures = 0;
   const moved = !memory.plan.completion && Math.hypot(entry.to.x-entry.from.x, entry.to.y-entry.from.y, entry.to.z-entry.from.z) >= 2;
   const changed = Object.keys(entry.inventoryDelta).length > 0 || entry.healthDelta > 0;
   memory.plan.noProgress = moved || changed ? 0 : memory.plan.noProgress+1;

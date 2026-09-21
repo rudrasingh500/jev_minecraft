@@ -12,9 +12,9 @@ export const microgoalSchema = {
     } }
   }, required: ['description','rationale','steps','completion']
 };
-export class LunaPlanner {
+export class AdvisorPlanner {
   constructor({ key, fetchImpl = fetch, timeout = 30000 }) {
-    if (!key) throw new Error('Set OPENAI_API_KEY for the GPT-5.6 Luna planner');
+    if (!key) throw new Error('Set OPENAI_API_KEY for the GPT-5.6 advisor planner');
     this.key = key; this.fetch = fetchImpl; this.timeout = timeout; this.requests = 0; this.inputTokens = 0; this.outputTokens = 0;
   }
   async propose(state, candidates, reason, signal) {
@@ -33,11 +33,11 @@ export class LunaPlanner {
         input: JSON.stringify(input), text: { format: { type: 'json_schema', name: 'minecraft_microgoal', strict: true, schema: microgoalSchema } }
       })
     });
-    if (!response.ok) { await response.body?.cancel(); throw new Error(`Luna HTTP ${response.status}`); }
+    if (!response.ok) { await response.body?.cancel(); throw new Error(`Advisor HTTP ${response.status}`); }
     const result = await response.json();
     this.inputTokens += result.usage?.input_tokens || 0; this.outputTokens += result.usage?.output_tokens || 0;
-    if (result.status !== 'completed') throw new Error('Luna did not complete a microgoal response');
+    if (result.status !== 'completed') throw new Error('Advisor did not complete a microgoal response');
     const text = (result.output || []).filter(o => o.type === 'message').flatMap(o => o.content || []).filter(c => c.type === 'output_text').map(c => c.text).join('');
-    try { return JSON.parse(text); } catch { throw new Error('Luna returned no valid microgoal JSON'); }
+    try { return JSON.parse(text); } catch { throw new Error('Advisor returned no valid microgoal JSON'); }
   }
 }

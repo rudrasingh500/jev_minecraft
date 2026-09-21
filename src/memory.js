@@ -86,7 +86,7 @@ function learnFromAction(memory, action, entry) {
 }
 export function memoryContext(memory, state) {
   const distance = p => Math.hypot(p.x-state.position.x,p.z-state.position.z);
-  const focus = memory.plan?.selectedBy === 'gpt-5.6-luna'
+  const focus = ['advisor','gpt-5.6-luna'].includes(memory.plan?.selectedBy)
     ? [memory.plan.description, ...(memory.plan.steps || []), ...(memory.plan.completion || []).map(c => c.key)].join(' ').toLowerCase()
     : memory.plan?.id || '';
   const relevantPlace = p => {
@@ -107,6 +107,6 @@ export function memoryContext(memory, state) {
       .sort((a,b) => relevantPlace(b)-relevantPlace(a)).slice(0,16),
     recentActions: memory.recent.slice(-10), failures: Object.values(memory.failures).filter(f => f.dimension === state.dimension).slice(-10),
     recentPath: memory.trail.slice(-12),
-    note: 'The sole objective remains Beat the Ender Dragon. The plan is a revisable microgoal selected by GPT-5.6 Luna, with completion conditions checked in code. Lessons aggregate observed outcomes in specific areas; they do not prove causation or guarantee future results. Known places are last-seen observations. Inventory deltas include nearby pickups. Repeated failure without changed conditions is evidence to change approach.'
+    note: 'The sole objective remains Beat the Ender Dragon. The plan is a revisable microgoal selected by the advisor, with completion conditions checked in code. Lessons aggregate observed outcomes in specific areas; they do not prove causation or guarantee future results. Known places are last-seen observations. Inventory deltas include nearby pickups. Repeated failure without changed conditions is evidence to change approach.'
   };
 }

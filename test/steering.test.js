@@ -29,15 +29,15 @@ test('planner rejection becomes advisory error without throwing into action exec
  assert.equal(steering.pending,false); assert.equal(steering.take(),null);
 });
 
-test('actual Luna client can wait on a response while Jev decisions and actions continue',async()=>{
- const {LunaPlanner}=await import('../src/luna.js');
+test('actual advisor client can wait on a response while Jev decisions and actions continue',async()=>{
+ const {AdvisorPlanner}=await import('../src/advisor.js');
  const {JevClient}=await import('../src/jev.js');
  let release;let started=false;
- const luna=new LunaPlanner({key:'test',fetchImpl:async()=>{
+ const advisor=new AdvisorPlanner({key:'test',fetchImpl:async()=>{
   started=true;await new Promise(r=>release=r);
   return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:'{}'}]}]});
  }});
- const steering=new Steering(luna);
+ const steering=new Steering(advisor);
  const jev=new JevClient({key:'test',fetchImpl:async()=>Response.json({answers:{action:{type:'choice',choice:'craft',confidence:0.9}}})});
  steering.request({},[],'initial',1);await setImmediate();
  assert.equal(started,true);
@@ -50,7 +50,7 @@ test('actual Luna client can wait on a response while Jev decisions and actions 
  release();await setImmediate();assert.deepEqual(steering.take().proposal,{});
 });
 
-test('full skill and target decisions execute with no initial microgoal while Luna is pending',async()=>{
+test('full skill and target decisions execute with no initial microgoal while advisor is pending',async()=>{
  const {JevClient}=await import('../src/jev.js');
  const {executionContext}=await import('../src/context.js');
  let finish;const steering=new Steering({propose:()=>new Promise(resolve=>finish=resolve)});
