@@ -32,7 +32,7 @@ export class AdvisorPlanner {
     const input = {
       reason, state: context, availableActions: candidates.map(({id,description}) => ({id,description})),
       monitoredNearbyBlocks: ['crafting_table','furnace','nether_portal','end_portal','end_portal_frame','spawner','chest','diamond_ore','deepslate_diamond_ore','obsidian'],
-      capabilities: 'Jev repeatedly chooses from actions generated from the live world. It can mine multiple nearby targets, deliberately excavate safe one-step passages, approach visible blocks, interact with blocks and non-hostile entities, craft available recipes, place, equip, and use items, manage furnaces, explore varied routes, collect drops, and fight. The available action list is only the current snapshot; intermediate actions can reveal or create new options.'
+      capabilities: 'Jev repeatedly chooses grounded actions generated from the live world. It can move to selected coordinates, explore, excavate, mine, place, craft, equip, use items, manage furnaces and inspected containers, inspect and execute villager trades, sleep, swim and dive, launch and steer boats, tend crops, handle buckets, interact with blocks and entities, collect drops, and fight or flee. The available action list is only the current snapshot; inspection and intermediate actions can reveal new options.'
     };
     this.requests++;
     const response = await this.fetch('https://api.openai.com/v1/responses', {

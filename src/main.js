@@ -47,6 +47,7 @@ function log(event, data = {}) {
 }
 function cancelMovement() {
   bot.pathfinder?.setGoal(null); bot.clearControlStates?.();
+  if (bot.vehicle) bot.moveVehicle?.(0,0);
   bot.stopDigging?.(); bot.deactivateItem?.();
   if (bot.currentWindow) bot.closeWindow?.(bot.currentWindow);
 }
@@ -91,12 +92,12 @@ process.stdin.on('data', data => {
   if (command === 'status') log('status', { decisions, requests: jev.requests, skippedLowConfidence, paused, running });
 });
 
-async function execute(action, quantity = 1) {
+async function execute(action, quantity = 1, parameters) {
   active = new AbortController();
   const signal = AbortSignal.any([active.signal, lifecycle.signal]);
   actions.signal = signal;
   try {
-    await runBoundedAction(() => action.run(signal,quantity), {
+    await runBoundedAction(() => action.run(signal,quantity,parameters), {
       controller: active, cancel: cancelMovement, timeoutMs: c.actionTimeout
     });
   } catch (error) {
@@ -175,19 +176,20 @@ async function loop() {
       }
       let action = legal.find(a => a.id === choice.id);
       const emergency = fresh.health <= 6;
-      if (emergency) action = legal.find(a => a.skill === 'flee') || legal.find(a => a.skill === 'eat');
+      if (emergency) action = legal.find(a => a.skill === 'flee') || legal.find(a => a.skill === 'eat') ||
+        legal.find(a=>a.id==='boat_dismount') || legal.find(a=>a.id==='sleep_wake') || action;
       if (!action) { log('stale_decision', { choice: choice.id }); continue; }
       if (!emergency && choice.confidence < c.confidence) {
         skippedLowConfidence++;
         actions.cooldowns.set(choice.id, Date.now() + 10000);
         await sleep(c.interval, undefined, { signal: lifecycle.signal }); continue;
       }
-      log('action', { advisorPending:steering.pending, quantity:choice.quantity || 1, id: action.id, confidence: choice.confidence, emergency, objective: fresh.objective, position: fresh.position, health: fresh.health });
+      log('action', { advisorPending:steering.pending, quantity:choice.quantity || 1, parameters:choice.parameters, id: action.id, confidence: choice.confidence, emergency, objective: fresh.objective, position: fresh.position, health: fresh.health });
       const actionStarted = Date.now();
       let actionError;
       memory.activeAction = { id: action.id, description: action.description, confidence: choice.confidence, started: actionStarted };
       try {
-        await execute(action,Math.min(choice.quantity || 1,action.maxQuantity || 1));
+        await execute(action,Math.min(choice.quantity || 1,action.maxQuantity || 1),choice.parameters);
       } catch (error) {
         actionError = error;
         actions.cooldowns.set(action.id, Date.now() + 30000);

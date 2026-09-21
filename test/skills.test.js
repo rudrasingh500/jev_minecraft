@@ -11,6 +11,7 @@ test('skills expose non-progression recipes and blocks regardless of stockpile q
   registry:{itemsArray:[{id:2,name:'oak_button'}],itemsByName:{oak_button:{id:2}},blocksByName:{oak_log:{id:1}}},
   recipesFor:()=>[{result:{count:1}}],findBlock:()=>null,canSeeBlock:()=>true,
   findBlocks:({matching,useExtraInfo})=>{
+   if(!useExtraInfo)return [];
    // Reproduce Mineflayer's palette preflight, then its positioned filter.
    assert.equal(matching({...block,position:null}),true);
    assert.equal(matching(null),false);
@@ -81,4 +82,17 @@ test('placement selects material before coordinates to bound parameter context',
  }});
  const choice=await client.chooseAction({},[{id:'place_dirt_1_2_3',skill:'place',parameterGroup:'dirt',description:'Place dirt at (1,2,3)'},{id:'place_stone_1_2_3',skill:'place',parameterGroup:'stone',description:'Place stone at (1,2,3)'}]);
  assert.equal(choice.id,'place_dirt_1_2_3');assert.equal(index,3);
+});
+
+test('coordinate movement composes exact X and Z choices without enumerating their cross product',async()=>{
+ const answers=['coordinate_move','5','-3'];let index=0;
+ const client=new JevClient({key:'test',fetchImpl:async(url,opts)=>{
+  const body=JSON.parse(opts.body);const choice=answers[index++];
+  assert.ok(Object.hasOwn(body.questions.action.criteria,choice));
+  if(index===3)assert.equal(body.state.coordinateSelection.x,5);
+  return Response.json({answers:{action:{type:'choice',choice,confidence:0.9}}});
+ }});
+ const range=Array.from({length:129},(_,i)=>i-64);
+ const choice=await client.chooseAction({},[{id:'coordinate_move_local',skill:'coordinate_move',description:'Move to any local coordinate',coordinateOptions:{origin:{x:0,z:0},x:range,z:range}}]);
+ assert.equal(choice.id,'coordinate_move_local');assert.deepEqual(choice.parameters,{x:5,z:-3});assert.equal(index,3);
 });

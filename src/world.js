@@ -15,6 +15,7 @@ export function observe(bot, memory) {
   const s = {
     dimension: String(bot.game.dimension), position: vec(bot.entity.position), health: bot.health, food: bot.food,
     time: bot.time.timeOfDay, inventory,
+    inWater:!!bot.entity.isInWater, isSleeping:!!bot.isSleeping, vehicle:bot.vehicle?.name || null,
     heldItem: bot.heldItem?.name || null,
     equipped: [5, 6, 7, 8].map(slot => bot.inventory.slots[slot]?.name).filter(Boolean),
     entities: entities.map(e => ({ id: e.id, name: e.name, position: vec(e.position), distance: Math.round(bot.entity.position.distanceTo(e.position)), hostile: hostile.test(e.name) })),

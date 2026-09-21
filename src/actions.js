@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { navigate } from './navigation.js';
 import { explorationOptions, loopSummary } from './exploration.js';
 import { goalRecipeGuidance } from './resources.js';
+import { Capabilities, containerBlock } from './capabilities.js';
 const { goals } = pathfinderPackage;
 const { Vec3 } = vec3Package;
 const v = p => new Vec3(p.x, p.y, p.z);
@@ -12,8 +13,8 @@ const protectedBlock = block => /^(obsidian|crafting_table|furnace|end_portal_fr
 const neighbors = [new Vec3(1,0,0),new Vec3(-1,0,0),new Vec3(0,1,0),new Vec3(0,-1,0),new Vec3(0,0,1),new Vec3(0,0,-1)];
 
 export class Actions {
-  constructor(bot, memory) { this.bot = bot; this.memory = memory; this.cooldowns = new Map(); }
-  item(name) { return this.bot.inventory.items().find(i => typeof name === 'string' ? i.name === name : name.test(i.name)); }
+  constructor(bot, memory) { this.bot = bot; this.memory = memory; this.cooldowns = new Map(); this.capabilities=new Capabilities(this); }
+  item(name) { return name ? this.bot.inventory.items().find(i => typeof name === 'string' ? i.name === name : name.test(i.name)) : undefined; }
   block(name, distance = 32) { return this.bot.findBlock({ matching: b => typeof name === 'string' ? b.name === name : name.test(b.name), maxDistance: distance }); }
   async near(position, range = 2) {
     this.signal?.throwIfAborted();
@@ -193,16 +194,17 @@ export class Actions {
   candidates(s) {
     const bot = this.bot;
     const out = [];
-    const add = (skill, target, description, run, maxQuantity = 1) => {
+    const add = (skill, target, description, run, maxQuantity = 1, parameterGroup, parameterGroupDescription, extra = {}) => {
       const id = `${skill}_${target}`;
       const retry = this.memory.failures?.[`${s.dimension}:${id}`]?.retryAfter || 0;
       const interactionState=skill==='interact' ? `${bot.blockAt(new Vec3(...String(target).split('_').map(Number)))?.stateId}:${bot.heldItem?.name || 'empty'}` :
         skill==='interact_entity' ? `${target}:${bot.heldItem?.name || 'empty'}` : undefined;
       const repeats=(this.memory.recent || []).filter(a=>a.dimension===s.dimension && a.action===id && a.interactionState===interactionState && Date.now()-a.started<60000 && !Object.keys(a.inventoryDelta || {}).length);
       if(interactionState && repeats.length>=2)return false;
-      if (Math.max(this.cooldowns.get(id) || 0,retry) <= Date.now()) {out.push({id,skill,description,run,maxQuantity,interactionState});return true;}
+      if (Math.max(this.cooldowns.get(id) || 0,retry) <= Date.now()) {out.push({id,skill,description,run,maxQuantity,interactionState,parameterGroup,parameterGroupDescription,...extra});return true;}
       return false;
     };
+    if(this.capabilities.exclusiveCandidates(s,add))return out;
     s.goalRecipeGuidance = goalRecipeGuidance(bot,s);
     s.exploration = loopSummary(this.memory,s.dimension);
     const table = this.block('crafting_table');
@@ -230,7 +232,7 @@ export class Actions {
       if (bot.registry.foodsByName?.[item.name] && bot.food < 20) add('eat',item.name,`Eat ${item.name}`,async()=>{await this.equip(item.name);await bot.consume();});
       const armorSlot = {helmet:'head',chestplate:'torso',leggings:'legs',boots:'feet'}[item.name.split('_').at(-1)];
       if (armorSlot) add('wear',item.name,`Wear ${item.name}`,()=>bot.equip(item,armorSlot));
-      add('use',item.name,`Use held ${item.name}; effect depends on item (no block target)`,async signal=>{
+      if(!/_bucket$|_(boat|raft)$/.test(item.name)) add('use',item.name,`Use held ${item.name}; effect depends on item (no block target)`,async signal=>{
         if (item.name === 'ender_eye') return this.eye(signal);
         await this.equip(item.name);bot.activateItem();
         try { await sleep(1000,undefined,{signal}); } finally {bot.deactivateItem();}
@@ -255,7 +257,7 @@ export class Actions {
         add('move',`visible_${b.name}_${p.x}_${p.y}_${p.z}`,`Approach visible ${b.name} at ${p} without mining or activating it`,()=>this.near(p,2));
         approached.add(b.name);
       }
-      add('interact',`${p.x}_${p.y}_${p.z}`,`Right-click ${b.name} at ${p} using ${bot.heldItem?.name || 'an empty hand'}`,async()=>{await this.near(p,3);const block=bot.blockAt(p);if(!block)throw new Error('Target unloaded');await bot.activateBlock(block,new Vec3(0,1,0));});
+      if(!containerBlock(b) && !bot.isABed?.(b))add('interact',`${p.x}_${p.y}_${p.z}`,`Right-click ${b.name} at ${p} using ${bot.heldItem?.name || 'an empty hand'}`,async()=>{await this.near(p,3);const block=bot.blockAt(p);if(!block)throw new Error('Target unloaded');await bot.activateBlock(block,new Vec3(0,1,0));});
     }
     const passages=[['north',0,-1],['east',1,0],['south',0,1],['west',-1,0]];
     for(const [direction,dx,dz] of passages) for(const [slope,dy] of [['down',-1],['level',0],['up',1]]) {
@@ -272,7 +274,7 @@ export class Actions {
       else if(e.name!=='player') {
         add('fight',e.id,`Fight ${e.name} at distance ${e.distance}`,signal=>this.fight(e.id,signal));
         if(this.item('bow') && this.item('arrow')) add('shoot',e.id,`Shoot ${e.name} at distance ${e.distance}`,signal=>this.shoot(e.id,signal));
-        if(!e.hostile) add('interact_entity',e.id,`Right-click ${e.name} at distance ${e.distance} using ${bot.heldItem?.name || 'an empty hand'}`,()=>this.interactEntity(e.id));
+        if(!e.hostile && e.name!=='villager' && !/boat|raft/.test(e.name)) add('interact_entity',e.id,`Right-click ${e.name} at distance ${e.distance} using ${bot.heldItem?.name || 'an empty hand'}`,()=>this.interactEntity(e.id));
       }
       if(e.hostile) add('flee',e.id,`Move away from ${e.name}`,()=>navigate(bot,new goals.GoalInvert(new goals.GoalNear(e.position.x,e.position.y,e.position.z,14))));
       add('move',`entity_${e.id}`,`Approach ${e.name} at ${JSON.stringify(e.position)}`,()=>this.near(e.position));
@@ -288,6 +290,7 @@ export class Actions {
         await navigate(bot,new goals.GoalNearXZ(target.x,target.z,arrivalRadius),timeoutMs);
       });
     }
+    this.capabilities.addCandidates(s,add,{placements});
     if(this.block('furnace')) {
       add('smelt','collect','Collect furnace output',()=>this.smelt());
       // The agent selects input and fuel independently in the furnace skill.

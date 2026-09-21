@@ -56,3 +56,13 @@ test('Jev explicitly acknowledges advisory goals without replacing the action ch
  const choice=await client.choose({memory:{plan:{completion:[{kind:'inventory',key:'wood',target:1}]}}},candidates);
  assert.equal(choice.id,'wood');assert.deepEqual(choice.goalStatus,{status:'pursuing',confidence:0.8});
 });
+
+test('quantity choices scale to full inventory and container stacks',async()=>{
+ const client=new JevClient({key:'test-only',fetchImpl:async(url,opts)=>{
+  const body=JSON.parse(opts.body);
+  assert.deepEqual(Object.keys(body.questions.quantity.criteria),['1','2','4','8','16','32','64']);
+  return Response.json({answers:{action:{type:'choice',choice:'deposit',confidence:0.9},quantity:{type:'choice',choice:'32',confidence:0.9}}});
+ }});
+ const choice=await client.choose({},[{id:'deposit',description:'Deposit cobblestone',maxQuantity:64}]);
+ assert.equal(choice.quantity,32);
+});

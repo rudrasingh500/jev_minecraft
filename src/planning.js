@@ -1,5 +1,6 @@
 // Plans are reversible tactics selected by Jev, not inventory-driven objectives.
 export function planKey(action) {
+  if (['container','trade','sleep','swim','boat','farm','bucket','coordinate_move'].includes(action.skill)) return action.skill;
   if (action.id.startsWith('mine_')) return `gather:${action.description.match(/^Mine (\w+)/)?.[1] || 'blocks'}`;
   if (action.id.startsWith('explore_')) return 'explore';
   if (/^(fight|shoot)_/.test(action.id)) return `combat:${action.description.match(/(?:Fight |Shoot bow at )(\w+)/)?.[1] || 'nearby'}`;

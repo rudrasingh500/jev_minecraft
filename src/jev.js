@@ -21,7 +21,7 @@ function summarizeSkill(skill,candidates) {
       .replace(/ toward \([^)]*\)/g,'')
       .replace(/; recent arrival matches \d+/g,'');
     if(descriptions.includes(summary)) continue;
-    if(length+summary.length>800) break;
+    if(length+summary.length>400) break;
     descriptions.push(summary);length+=summary.length;
   }
   return `${skill}: ${candidates.length} currently available actions. ${descriptions.join('; ')}`;
@@ -47,13 +47,25 @@ export class JevClient {
     let targets = candidates.filter(a=>a.skill===selected.id);
     let parameterConfidence=1;
     if(targets.some(a=>a.parameterGroup)) {
-      const groups=[...new Set(targets.map(a=>a.parameterGroup))].map(id=>({id,description:`Use ${id}; choose placement coordinates next`}));
+      const groups=[...new Set(targets.map(a=>a.parameterGroup))].map(id=>{
+        const example=targets.find(a=>a.parameterGroup===id);
+        return {id,description:example?.parameterGroupDescription || `Choose ${id}; select the exact target next`};
+      });
       const parameter=await this.choose(state,groups,signal,'skill');
       parameterConfidence=parameter.confidence;
       targets=targets.filter(a=>a.parameterGroup===parameter.id);
     }
-    const choice = await this.choose(state,targets,signal);
-    return {...choice,confidence:Math.min(selected.confidence,parameterConfidence,choice.confidence)};
+    const coordinateTarget=targets.length===1 && targets[0].coordinateOptions ? targets[0] : null;
+    const choice = coordinateTarget ? {id:coordinateTarget.id,confidence:1} : await this.choose(state,targets,signal);
+    let coordinateConfidence=1,parameters;
+    if(coordinateTarget) {
+      const {origin,x,z}=coordinateTarget.coordinateOptions;
+      const xChoice=await this.choose(state,x.map(value=>({id:String(value),description:`Set destination X to ${value}; offset ${value-origin.x}`})),signal,'parameter');
+      const zChoice=await this.choose({...state,coordinateSelection:{x:Number(xChoice.id)}},z.map(value=>({id:String(value),description:`Set destination Z to ${value}; offset ${value-origin.z}`})),signal,'parameter');
+      coordinateConfidence=Math.min(xChoice.confidence,zChoice.confidence);
+      parameters={x:Number(xChoice.id),z:Number(zChoice.id)};
+    }
+    return {...choice,parameters,confidence:Math.min(selected.confidence,parameterConfidence,coordinateConfidence,choice.confidence)};
   }
 
   async choose(state, candidates, signal, mode = 'action') {
@@ -61,13 +73,19 @@ export class JevClient {
     const criteria = Object.fromEntries(candidates.map(a => [a.id, a.description]));
     const context = mode !== 'plan' ? executionContext(state,candidates) : state;
     const assess = mode === 'action' && !!context.microgoal && context.microgoal.status !== 'completed';
+    const maximumQuantity=Math.max(1,...candidates.map(a=>a.maxQuantity || 1));
+    const quantityValues=[1,2,4,8,16,32,64].filter(value=>value<=maximumQuantity);
+    if(!quantityValues.includes(maximumQuantity))quantityValues.push(maximumQuantity);
+    const quantityCriteria=Object.fromEntries(quantityValues.sort((a,b)=>a-b).map(value=>[String(value),`${value} unit${value===1?'':'s'} or batches`]));
+    const instructions=mode==='plan' ? JEV_PLAN_INSTRUCTIONS : mode==='parameter'
+      ? 'Choose the coordinate value that best serves the current objective and tactical situation.' : JEV_ACTION_INSTRUCTIONS;
     const body = JSON.stringify(compactRequest({
       model: this.model, state:context,
       questions: { action: {
         type: 'choice',
-        instructions: mode === 'plan' ? JEV_PLAN_INSTRUCTIONS : JEV_ACTION_INSTRUCTIONS,
+        instructions,
         criteria
-      }, ...(candidates.some(a=>a.maxQuantity>1) ? {quantity:{type:'choice',instructions:'Choose how many recipe batches or furnace items are useful now.',criteria:{'1':'One batch','2':'Two batches','4':'Four batches'}}} : {}), ...(assess ? { goal_status: { type:'choice', instructions:'Assess whether the active advisory microgoal is still useful: pursuing, blocked, or complete.', criteria:{ pursuing:'Continue using this milestone as guidance.', blocked:'This milestone is not currently useful or feasible.', complete:'Current observations satisfy the milestone.'} } } : {}) }
+      }, ...(maximumQuantity>1 ? {quantity:{type:'choice',instructions:'Choose a useful quantity for the selected action without exceeding what its description says is available.',criteria:quantityCriteria}} : {}), ...(assess ? { goal_status: { type:'choice', instructions:'Assess whether the active advisory microgoal is still useful: pursuing, blocked, or complete.', criteria:{ pursuing:'Continue using this milestone as guidance.', blocked:'This milestone is not currently useful or feasible.', complete:'Current observations satisfy the milestone.'} } } : {}) }
     }));
     for (let attempt = 0; attempt < 3; attempt++) {
       this.requests++;
@@ -97,7 +115,7 @@ export class JevClient {
       const assessment = result.answers?.goal_status;
       const goalStatus = assessment?.type === 'choice' && ['pursuing','blocked','complete'].includes(assessment.choice) && Number.isFinite(assessment.confidence) && assessment.confidence >= 0 && assessment.confidence <= 1 ? {status:assessment.choice,confidence:assessment.confidence} : null;
       const quantityAnswer=result.answers?.quantity;
-      const quantity=quantityAnswer?.type==='choice' && ['1','2','4'].includes(quantityAnswer.choice) ? Number(quantityAnswer.choice) : 1;
+      const quantity=quantityAnswer?.type==='choice' && Object.hasOwn(quantityCriteria,quantityAnswer.choice) ? Number(quantityAnswer.choice) : 1;
       return { id: answer.choice, confidence: answer.confidence, goalStatus, quantity:Math.min(quantity,candidates.find(a=>a.id===answer.choice)?.maxQuantity || 1), usage: result.usage };
     }
   }

@@ -13,7 +13,7 @@ export function loadMemory(path, worldId) {
       saved.recent = (saved.recent || []).map(entry => ({ ...entry, objective: RUN_OBJECTIVE }));
     }
   } catch (error) { if (error.code !== 'ENOENT') console.warn('Memory could not be loaded; starting fresh.'); }
-  return { schema: 1, worldId, recent: [], portals: {}, visits: {}, landmarks: {}, failures: {}, milestones: [], trail: [], lessons: {}, plan: null, planHistory: [], eyeTarget: null, ...saved, started: Date.now(), current: null, activeAction: null };
+  return { schema: 1, worldId, recent: [], portals: {}, visits: {}, landmarks: {}, containerViews:{}, tradeViews:{}, failures: {}, milestones: [], trail: [], lessons: {}, plan: null, planHistory: [], eyeTarget: null, ...saved, started: Date.now(), current: null, activeAction: null };
 }
 export function saveMemory(path, memory) {
   mkdirSync(dirname(path), { recursive: true });
@@ -31,7 +31,7 @@ export function rememberBlock(memory, dimension, block, at = Date.now()) {
   if (entries.length > 300) for (const [key] of entries.sort((a,b) => a[1].lastSeen - b[1].lastSeen).slice(0, entries.length - 300)) delete memory.landmarks[key];
 }
 export function updateMemory(memory, state) {
-  memory.current = { dimension: state.dimension, position: state.position, health: state.health, food: state.food, inventory: state.inventory, equipped: state.equipped, heldItem: state.heldItem, observedBlocks:state.observedBlocks, entities:state.entities, objective: state.objective, at: Date.now() };
+  memory.current = { dimension: state.dimension, position: state.position, health: state.health, food: state.food, inventory: state.inventory, equipped: state.equipped, heldItem: state.heldItem, observedBlocks:state.observedBlocks, entities:state.entities, inWater:state.inWater, isSleeping:state.isSleeping, vehicle:state.vehicle, objective: state.objective, at: Date.now() };
   const last = memory.trail.at(-1);
   if (!last || last.dimension !== state.dimension || Math.hypot(last.x-state.position.x,last.y-state.position.y,last.z-state.position.z) >= 4) {
     memory.trail.push({ ...state.position, dimension: state.dimension, at: Date.now() });
@@ -105,6 +105,12 @@ export function memoryContext(memory, state) {
     milestones: memory.milestones,
     knownPlaces: Object.values(memory.landmarks).filter(p => p.dimension === state.dimension)
       .sort((a,b) => relevantPlace(b)-relevantPlace(a)).slice(0,16),
+    knownContainers:Object.values(memory.containerViews || {}).filter(view=>view.dimension===state.dimension)
+      .sort((a,b)=>distance(a.position)-distance(b.position)).slice(0,4)
+      .map(({name,position,contents,lastSeen})=>({name,position,contents,lastSeen})),
+    knownTrades:Object.values(memory.tradeViews || {}).filter(view=>view.dimension===state.dimension)
+      .sort((a,b)=>distance(a.position)-distance(b.position)).slice(0,4)
+      .map(({position,offers,lastSeen})=>({position,offers:(offers || []).slice(0,8),lastSeen})),
     recentActions: memory.recent.slice(-10), failures: Object.values(memory.failures).filter(f => f.dimension === state.dimension).slice(-10),
     recentPath: memory.trail.slice(-12),
     note: 'Plans are revisable advisory milestones. Lessons and known places summarize observations and may be stale.'

@@ -10,7 +10,7 @@ export function compactRequest(request, maxBytes = 24000) {
     );
   }
   const size = () => Buffer.byteLength(JSON.stringify(result));
-  for (const field of ['recentPath','planHistory','recentActions','knownPlaces','lessons','failures','milestones']) {
+  for (const field of ['recentPath','planHistory','recentActions','knownPlaces','knownContainers','knownTrades','lessons','failures','milestones']) {
     const list = state?.memory?.[field];
     if (!Array.isArray(list)) continue;
     while (list.length > 1 && size() > maxBytes) {

@@ -133,11 +133,11 @@ Type one of these commands into the running terminal:
 
 ## Capabilities
 
-Jev now makes hierarchical decisions. It first chooses a general skill, then chooses a grounded target from the current world and inventory. Placement adds a material-selection step before coordinates, and crafting or furnace loading can request a quantity of 1, 2, or 4. A single action may therefore require multiple TypeSafe requests and more latency than the previous single-menu controller.
+Jev now makes hierarchical decisions. It first chooses a general skill, then chooses a grounded target from the current world and inventory. Large target spaces add an intermediate operation, material, or coordinate selection. Quantity-aware actions can request 1, 2, 4, 8, 16, 32, or 64 units when that amount is available. A single action may therefore require multiple TypeSafe requests and more latency than the previous single-menu controller.
 
-Skills include mining several visible targets of each type, bounded safe excavation, approaching visible blocks without altering them, crafting any currently available recipe, placing held blocks, equipping, wearing, eating, using held items, activating blocks and non-hostile entities, loading or collecting furnaces, moving toward observed targets, exploring at multiple bearings and ranges, collecting drops, fleeing, melee, and approximate bow shots. Targets come from the Minecraft registry, inventory, and observed world. Resource quotas, preferred craft lists, mob-hunting quotas, progression gates, and the portal-building blueprint have been removed. The agent must compose these skills into a plan.
+Skills include mining several visible targets of each type, bounded safe excavation, crafting and placement, equipment and item use, furnace operation, inspected container deposits and withdrawals, villager trade inspection and execution, sleeping, directional swimming and diving, launching and steering boats, harvesting/tilling/planting/fertilizing crops, collecting/emptying/milking with buckets, exact local X/Z coordinate movement, exploration, entity and block interaction, collecting drops, fleeing, melee, and approximate bow shots. Targets come from the Minecraft registry, inventory, and observed world. For coordinate movement, Jev independently chooses any integer X and Z within 64 blocks rather than selecting from a sparse direction grid. Resource quotas, preferred craft lists, mob-hunting quotas, progression gates, and the portal-building blueprint have been removed. The agent must compose these skills into a plan.
 
-Mechanics remain bounded: pathfinding cannot dig on its own, excavation opens only a checked two-block-high step with solid footing, mining avoids underfoot and adjacent-lava hazards, targets are sampled from nearby loaded blocks and entities, placement uses nearby supported spaces, and actions have deadlines. Arbitrary coordinates, generated code, trading, and general container management are not supported. The controller does not currently verify a complete portal-building sequence or dragon kill.
+Mechanics remain bounded: pathfinding cannot dig on its own, excavation opens only a checked two-block-high step with solid footing, mining avoids underfoot and adjacent-lava hazards, targets are sampled from nearby loaded blocks and entities, placement uses nearby supported spaces, and actions have deadlines. Container contents and villager offers must be inspected before Jev can choose a transfer or trade. Coordinate movement is local to a 64-block radius per axis while Pathfinder selects viable terrain height. Generated code and chat commands are not supported. The controller does not currently verify a complete portal-building sequence or dragon kill.
 
 ## How it is organized
 
@@ -147,6 +147,7 @@ src/jev.js        TypeSafe action-decision client
 src/advisor.js    Optional GPT-5.6 advisor milestone planner
 src/strategy.js   Fixed final objective
 src/actions.js    Generic skills, grounded targets, and execution
+src/capabilities.js Containers, trades, sleep, water, boats, farming, buckets, and coordinate movement
 src/world.js      Minecraft observation and state extraction
 src/navigation.js Pathfinder-based movement helpers
 src/memory.js     Persistent world memory and action history
