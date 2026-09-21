@@ -36,7 +36,16 @@ test('completed and missing microgoals do not leave active steps in execution co
  const projected=executionContext(done,candidates);
  assert.equal(projected.microgoal.status,'completed');assert.deepEqual(projected.microgoal.steps,[]);
  assert.deepEqual(projected.goalRecipeGuidance,[]);
- assert.equal(executionContext({inventory:{}},candidates).microgoal,null);
+ const missing=executionContext({inventory:{},memory:{milestones:[{id:'wooden_pickaxe'}],planHistory:[{description:'Gather wood',outcome:'completed'}],lessons:[{tactic:'gather:wood',attempts:2,completions:2,failures:0,gains:{oak_log:2},errors:{}}]}},candidates);
+ assert.equal(missing.microgoal,null);assert.equal(missing.strategicMemory.milestones[0].id,'wooden_pickaxe');
+ assert.equal(missing.strategicMemory.recentGoalOutcomes[0].outcome,'completed');
+});
+test('blocked microgoals stop recipe steering and known movement targets survive filtering',()=>{
+ const blocked=structuredClone(state);blocked.memory.plan.acknowledgement={status:'blocked'};
+ const projected=executionContext(blocked,[...candidates,{id:'move_chest_1_2_3',description:'Move to chest'}]);
+ assert.equal(projected.executionPolicy.mode,'self_directed');assert.deepEqual(projected.goalRecipeGuidance,[]);
+ assert.equal(projected.tacticalMemory.knownPlaces[0].name,'chest');
+ assert.ok(projected.strategicMemory);
 });
 test('advisor continues receiving strategic history that is removed from Jev',async()=>{
  const planner=new AdvisorPlanner({key:'test',fetchImpl:async(url,opts)=>{

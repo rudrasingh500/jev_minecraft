@@ -5,14 +5,28 @@ export function explorationOptions(memory, state) {
   const recent = (memory.recent || []).filter(a=>a.dimension===state.dimension).slice(-16);
   // Actual arrival points, not chunk keys for destinations the pathfinder never reached.
   const points = recent.flatMap(a=>[a.from,a.to]).filter(p=>p && distance(p,origin)>4);
-  const options = [['north',0,-12],['east',12,0],['south',0,12],['west',-12,0]].map(([label,dx,dz])=>{
-    const target={x:Math.floor(origin.x)+dx,z:Math.floor(origin.z)+dz};
+  const directions = [
+    ['north',0,-1],['northeast',1,-1],['east',1,0],['southeast',1,1],
+    ['south',0,1],['southwest',-1,1],['west',-1,0],['northwest',-1,-1]
+  ];
+  const distances = [1,2,4,8,16,32,64];
+  const options=[];
+  for(const distanceBlocks of distances) for(const [direction,dx,dz] of directions) {
+    const scale=distanceBlocks/Math.hypot(dx,dz);
+    const target={x:Math.floor(origin.x)+Math.round(dx*scale),z:Math.floor(origin.z)+Math.round(dz*scale)};
     const revisits=points.filter(p=>distance(target,p)<=6).length;
-    return {label,target,revisits};
-  });
-  const novel=options.filter(o=>o.revisits===0);
-  // Only generic exploration is filtered; explicit move/flee actions remain available.
-  return novel.length ? novel : options.filter(o=>o.revisits===Math.min(...options.map(o=>o.revisits)));
+    options.push({
+      label:`${direction}_${distanceBlocks}`,
+      direction,
+      distanceBlocks,
+      target,
+      revisits,
+      arrivalRadius:Math.min(3,Math.floor(distanceBlocks/4)),
+      timeoutMs:Math.min(19000,6000+distanceBlocks*250)
+    });
+  }
+  // Preserve all routes and expose revisit evidence to Jev instead of deciding the route here.
+  return options.sort((a,b)=>a.revisits-b.revisits || a.distanceBlocks-b.distanceBlocks);
 }
 
 export function loopSummary(memory, dimension) {

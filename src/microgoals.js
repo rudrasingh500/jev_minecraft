@@ -19,7 +19,7 @@ export function validateMicrogoal(proposal, state, registry) {
       typeof proposal.rationale !== 'string' || proposal.rationale.length > 1500 ||
       !Array.isArray(proposal.steps) || !proposal.steps.length || proposal.steps.length > 6 || proposal.steps.some(s => typeof s !== 'string' || s.length > 500) ||
       !Array.isArray(proposal.completion) || !proposal.completion.length || proposal.completion.length > 4) throw new Error('Invalid advisor microgoal');
-  if (proposal.completion.some(c => c.kind === 'travel_distance') || proposal.completion.every(c => c.kind === 'inventory' && ['gravel','dirt','cobblestone','cobbled_deepslate','netherrack'].includes(String(c.key).replace(/^minecraft:/, '')))) throw new Error('Microgoal must produce useful readiness or discovery, not travel or arbitrary filler blocks');
+  if (proposal.completion.some(c => c.kind === 'travel_distance')) throw new Error('Microgoal completion must be directly observable');
   for (const c of proposal.completion) {
     if (!Number.isInteger(c.target) || typeof c.key !== 'string') throw new Error('Invalid microgoal completion predicate');
     c.key = c.key.replace(/^minecraft:/, '');
@@ -41,8 +41,9 @@ export function reviewReason(memory, state, now = Date.now()) {
     return age >= 120000 ? 'microgoal_completed' : null;
   }
   p.status = 'active';
+  if (p.acknowledgement?.status === 'blocked') return 'microgoal_blocked';
   // Migrate old movement-only goals on the first eligible review.
-  if (age >= 120000 && (p.completion.some(c => c.kind === 'travel_distance') || p.completion.every(c => c.kind === 'inventory' && ['gravel','dirt','cobblestone','cobbled_deepslate','netherrack'].includes(String(c.key).replace(/^minecraft:/, ''))))) return 'replace_trivial_microgoal';
+  if (age >= 120000 && p.completion.some(c => c.kind === 'travel_distance')) return 'replace_trivial_microgoal';
   if (age < 120000) return null;
   if (p.dimension !== state.dimension) return 'dimension_changed';
   const recent = memory.recent?.filter(a => a.started >= p.selectedAt).slice(-12) || [];

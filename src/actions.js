@@ -7,6 +7,9 @@ import { goalRecipeGuidance } from './resources.js';
 const { goals } = pathfinderPackage;
 const { Vec3 } = vec3Package;
 const v = p => new Vec3(p.x, p.y, p.z);
+const air = block => !block || /^(air|cave_air|void_air)$/.test(block.name);
+const protectedBlock = block => /^(obsidian|crafting_table|furnace|end_portal_frame|nether_portal|end_portal|chest|barrel|spawner)$/.test(block?.name || '');
+const neighbors = [new Vec3(1,0,0),new Vec3(-1,0,0),new Vec3(0,1,0),new Vec3(0,-1,0),new Vec3(0,0,1),new Vec3(0,0,-1)];
 
 export class Actions {
   constructor(bot, memory) { this.bot = bot; this.memory = memory; this.cooldowns = new Map(); }
@@ -46,6 +49,44 @@ export class Actions {
     await this.bot.dig(b);
     this.signal?.throwIfAborted();
     await this.near(position, 1);
+  }
+  harvestable(block) {
+    return !!block?.diggable && (block.canHarvest(null) || this.bot.inventory.items().some(i=>block.canHarvest(i.type)));
+  }
+  safeExcavationBlock(block) {
+    return air(block) || (block.boundingBox==='block' && !protectedBlock(block) && this.harvestable(block) &&
+      !neighbors.some(d=>/lava/.test(this.bot.blockAt(block.position.plus(d))?.name || '')));
+  }
+  async digExcavationBlock(block) {
+    if (air(block)) return;
+    if (!this.safeExcavationBlock(block)) throw new Error(`Unsafe excavation block: ${block?.name || 'unknown'}`);
+    await this.tool(block);
+    this.signal?.throwIfAborted();
+    if (!this.bot.canDigBlock(block)) throw new Error('Excavation block out of reach');
+    await this.bot.dig(block);
+    this.signal?.throwIfAborted();
+  }
+  async excavate(destination) {
+    const p=v(destination);
+    const clearance=[p,p.offset(0,1,0)];
+    // Recheck after every pass because sand or gravel may fall into the opening.
+    for(let pass=0;pass<4;pass++) {
+      const blocking=clearance.map(q=>this.bot.blockAt(q)).filter(b=>!air(b));
+      if(!blocking.length) break;
+      for(const block of blocking.reverse()) await this.digExcavationBlock(block);
+    }
+    if(clearance.some(q=>!air(this.bot.blockAt(q)))) throw new Error('Excavation did not leave a clear passage');
+    const support=this.bot.blockAt(p.offset(0,-1,0));
+    if(support?.boundingBox!=='block' || /lava/.test(support.name)) throw new Error('Excavation destination has unsafe footing');
+    await navigate(this.bot,new goals.GoalBlock(p.x,p.y,p.z),5000);
+  }
+  async interactEntity(id) {
+    const initial=this.bot.entities[id];
+    if(!initial?.position) throw new Error('Entity disappeared');
+    await this.near(initial.position,2);
+    const entity=this.bot.entities[id];
+    if(!entity?.isValid) throw new Error('Entity disappeared');
+    await this.bot.activateEntity(entity);
   }
   async place(name, position) {
     const p = v(position);
@@ -155,9 +196,10 @@ export class Actions {
     const add = (skill, target, description, run, maxQuantity = 1) => {
       const id = `${skill}_${target}`;
       const retry = this.memory.failures?.[`${s.dimension}:${id}`]?.retryAfter || 0;
-      const interactionState=skill==='interact' ? `${bot.blockAt(new Vec3(...String(target).split('_').map(Number)))?.stateId}:${bot.heldItem?.name || 'empty'}` : undefined;
+      const interactionState=skill==='interact' ? `${bot.blockAt(new Vec3(...String(target).split('_').map(Number)))?.stateId}:${bot.heldItem?.name || 'empty'}` :
+        skill==='interact_entity' ? `${target}:${bot.heldItem?.name || 'empty'}` : undefined;
       const repeats=(this.memory.recent || []).filter(a=>a.dimension===s.dimension && a.action===id && a.interactionState===interactionState && Date.now()-a.started<60000 && !Object.keys(a.inventoryDelta || {}).length);
-      if(skill==='interact' && repeats.length>=2)return false;
+      if(interactionState && repeats.length>=2)return false;
       if (Math.max(this.cooldowns.get(id) || 0,retry) <= Date.now()) {out.push({id,skill,description,run,maxQuantity,interactionState});return true;}
       return false;
     };
@@ -201,19 +243,36 @@ export class Actions {
       matching:b=>b?.boundingBox==='block',
       useExtraInfo:b=>!!b?.position && bot.entity.position.distanceTo(b.position)<=16 &&
         !(b.position.x===feet.x && b.position.z===feet.z && b.position.y<feet.y) && bot.canSeeBlock(b)});
-    const seen=new Set();
+    const seen=new Map();
+    const approached=new Set();
     for (const p of blocks) {
       const b=bot.blockAt(p);if (!b) continue;
-      if (!seen.has(b.name) && b.diggable && (b.canHarvest(null) || bot.inventory.items().some(i=>b.canHarvest(i.type)))) {
-        if(add('mine',`${p.x}_${p.y}_${p.z}`,`Mine ${b.name} at ${p}`,()=>this.mine(p)))seen.add(b.name);
+      const count=seen.get(b.name) || 0;
+      if (count<3 && this.harvestable(b)) {
+        if(add('mine',`${p.x}_${p.y}_${p.z}`,`Mine ${b.name} at ${p}`,()=>this.mine(p)))seen.set(b.name,count+1);
       }
-      add('interact',`${p.x}_${p.y}_${p.z}`,`Activate ${b.name} at ${p} using the currently held item`,async()=>{await this.near(p,3);const block=bot.blockAt(p);if(!block)throw new Error('Target unloaded');await bot.activateBlock(block,new Vec3(0,1,0));});
+      if(!approached.has(b.name)) {
+        add('move',`visible_${b.name}_${p.x}_${p.y}_${p.z}`,`Approach visible ${b.name} at ${p} without mining or activating it`,()=>this.near(p,2));
+        approached.add(b.name);
+      }
+      add('interact',`${p.x}_${p.y}_${p.z}`,`Right-click ${b.name} at ${p} using ${bot.heldItem?.name || 'an empty hand'}`,async()=>{await this.near(p,3);const block=bot.blockAt(p);if(!block)throw new Error('Target unloaded');await bot.activateBlock(block,new Vec3(0,1,0));});
+    }
+    const passages=[['north',0,-1],['east',1,0],['south',0,1],['west',-1,0]];
+    for(const [direction,dx,dz] of passages) for(const [slope,dy] of [['down',-1],['level',0],['up',1]]) {
+      const destination=feet.offset(dx,dy,dz);
+      const support=bot.blockAt(destination.offset(0,-1,0));
+      const clearance=[bot.blockAt(destination),bot.blockAt(destination.offset(0,1,0))];
+      const blocking=clearance.filter(b=>!air(b));
+      if(support?.boundingBox==='block' && !/lava/.test(support.name) && blocking.length && blocking.every(b=>this.safeExcavationBlock(b))) {
+        add('excavate',`${direction}_${slope}`,`Excavate one safe ${slope} step ${direction}; clear a two-block-high passage and move into it`,()=>this.excavate(destination));
+      }
     }
     for (const e of s.entities) {
       if(e.name==='item') add('collect',e.id,`Collect dropped item at ${JSON.stringify(e.position)}`,()=>this.near(e.position,1));
       else if(e.name!=='player') {
         add('fight',e.id,`Fight ${e.name} at distance ${e.distance}`,signal=>this.fight(e.id,signal));
         if(this.item('bow') && this.item('arrow')) add('shoot',e.id,`Shoot ${e.name} at distance ${e.distance}`,signal=>this.shoot(e.id,signal));
+        if(!e.hostile) add('interact_entity',e.id,`Right-click ${e.name} at distance ${e.distance} using ${bot.heldItem?.name || 'an empty hand'}`,()=>this.interactEntity(e.id));
       }
       if(e.hostile) add('flee',e.id,`Move away from ${e.name}`,()=>navigate(bot,new goals.GoalInvert(new goals.GoalNear(e.position.x,e.position.y,e.position.z,14))));
       add('move',`entity_${e.id}`,`Approach ${e.name} at ${JSON.stringify(e.position)}`,()=>this.near(e.position));
@@ -224,9 +283,9 @@ export class Actions {
       const p=place.position;
       add('move',`${place.name}_${p.x}_${p.y}_${p.z}`,`Move to observed ${place.name} at ${JSON.stringify(p)}; may be stale`,()=>this.near(p,place.name.includes('portal')?0:2));
     }
-    for(const {label,target,revisits} of explorationOptions(this.memory,s)) {
-      add('explore',label,`Explore ${label} toward (${target.x}, ${target.z}) through existing terrain; recent arrival matches ${revisits}`,async()=>{
-        await navigate(bot,new goals.GoalNearXZ(target.x,target.z,3));
+    for(const {label,direction,distanceBlocks,target,revisits,arrivalRadius,timeoutMs} of explorationOptions(this.memory,s)) {
+      add('explore',label,`Explore ${distanceBlocks} blocks ${direction} toward (${target.x}, ${target.z}); recent arrival matches ${revisits}`,async()=>{
+        await navigate(bot,new goals.GoalNearXZ(target.x,target.z,arrivalRadius),timeoutMs);
       });
     }
     if(this.block('furnace')) {

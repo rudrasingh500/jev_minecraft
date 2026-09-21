@@ -5,16 +5,21 @@ import { navigate } from '../src/navigation.js';
 import { Vec3 } from 'vec3';
 const state={dimension:'overworld',position:{x:-83.5,y:96,z:-40.5}};
 const entry=(from,to)=>({dimension:'overworld',action:'explore_west',from,to,inventoryDelta:{}});
-test('actual log positions suppress immediate east reversal despite stopping short of requested goal',()=>{
+test('actual log positions annotate revisits without hiding movement options from Jev',()=>{
  const memory={recent:[entry({x:-74.6,y:95,z:-40.5},state.position)]};
  const options=explorationOptions(memory,state);
- assert.ok(!options.some(o=>o.label==='east'));
- assert.ok(options.some(o=>o.label==='west'));
+ assert.equal(options.length,56);
+ assert.ok(options.find(o=>o.label==='east_8').revisits>options.find(o=>o.label==='west_8').revisits);
+ assert.ok(options.some(o=>o.direction==='northeast'));
+ assert.deepEqual([...new Set(options.map(o=>o.distanceBlocks))],[1,2,4,8,16,32,64]);
+ assert.equal(options.find(o=>o.label==='north_1').arrivalRadius,0);
+ assert.equal(options.find(o=>o.label==='north_4').arrivalRadius,1);
 });
-test('revisited routes retain an escape option and dimension histories do not leak',()=>{
+test('revisited routes remain available and dimension histories do not leak',()=>{
  const recent=[[-84,-53],[-72,-41],[-84,-29],[-96,-41]].map(([x,z])=>entry({x,y:96,z},state.position));
- assert.ok(explorationOptions({recent},state).length>0);
- assert.equal(explorationOptions({recent}, {...state,dimension:'the_nether'}).length,4);
+ assert.equal(explorationOptions({recent},state).length,56);
+ assert.equal(explorationOptions({recent}, {...state,dimension:'the_nether'}).length,56);
+ assert.ok(explorationOptions({recent}, {...state,dimension:'the_nether'}).every(o=>o.revisits===0));
 });
 test('loop summary detects the observed back-and-forth cycle',()=>{
  const a={x:0,z:0},b={x:9,z:0};

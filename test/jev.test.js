@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { JevClient } from '../src/jev.js';
+import { JEV_ACTION_INSTRUCTIONS, JevClient } from '../src/jev.js';
 const candidates = [{ id: 'wood', description: 'Harvest a log' }, { id: 'wait', description: 'Wait' }];
 const result = choice => ({ answers: { action: { type: 'choice', choice, confidence: 0.9 } }, usage: { input_tokens: 12 } });
 
@@ -13,6 +13,10 @@ test('sends the documented choice schema to TypeSafe and returns a legal action'
     assert.equal(body.model, 'jev-latest');
     assert.deepEqual(body.questions.action.criteria, { wood: 'Harvest a log', wait: 'Wait' });
     assert.equal(body.questions.action.type, 'choice');
+    assert.equal(body.questions.action.instructions,JEV_ACTION_INSTRUCTIONS);
+    assert.match(body.questions.action.instructions,/Always keep making progress/);
+    assert.equal(body.state.executionPolicy.mode,'self_directed');
+    assert.match(body.state.executionPolicy.continuity,/work independently/);
     return Response.json(result('wood'));
   } });
   assert.equal((await client.choose({ health: 20 }, candidates)).id, 'wood');

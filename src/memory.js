@@ -107,6 +107,6 @@ export function memoryContext(memory, state) {
       .sort((a,b) => relevantPlace(b)-relevantPlace(a)).slice(0,16),
     recentActions: memory.recent.slice(-10), failures: Object.values(memory.failures).filter(f => f.dimension === state.dimension).slice(-10),
     recentPath: memory.trail.slice(-12),
-    note: 'The sole objective remains Beat the Ender Dragon. The plan is a revisable microgoal selected by the advisor, with completion conditions checked in code. Lessons aggregate observed outcomes in specific areas; they do not prove causation or guarantee future results. Known places are last-seen observations. Inventory deltas include nearby pickups. Repeated failure without changed conditions is evidence to change approach.'
+    note: 'Plans are revisable advisory milestones. Lessons and known places summarize observations and may be stale.'
   };
 }

@@ -44,15 +44,22 @@ export function executionContext(state, candidates) {
   if (readyForTable) needed.add('crafting_table');
   const recent = (memory.recentActions || []).slice(-4).map(({action,result,error,inventoryDelta,healthDelta,from,to}) =>
     ({action,result,error,inventoryDelta,healthDelta,from,to}));
+  const selfDirected=!microgoal || finished || microgoal.assessment==='blocked';
+  const strategicMemory=selfDirected ? {
+    milestones:(memory.milestones || []).slice(-12),
+    recentGoalOutcomes:(memory.planHistory || []).slice(-2).map(({description,outcome})=>({description,outcome})),
+    nearbyLessons:(memory.lessons || []).slice(0,4).map(({tactic,attempts,completions,failures,healthLost,gains,errors})=>
+      ({tactic,attempts,completions,failures,healthLost,gains,errors}))
+  } : undefined;
   return {...live, executionPolicy:{
-      mode:!microgoal || finished || microgoal.assessment==='blocked' ? 'self_directed' : 'microgoal_guided',
+      mode:selfDirected ? 'self_directed' : 'microgoal_guided',
       plannerPending:!!state.steering?.pending,
-      continuity:'Keep taking useful actions toward Beat the Ender Dragon while advice is pending. Continue useful current work; new advice may refine the next action, not restart preparation. Never wait for the advisor.'
-    }, goalRecipeGuidance:finished ? [] : live.goalRecipeGuidance, microgoal,
+      continuity:'Always act toward the final objective. Advisory microgoals steer priorities but never gate action; work independently while advice is absent, pending, completed, or blocked.'
+    }, goalRecipeGuidance:finished || microgoal?.assessment==='blocked' ? [] : live.goalRecipeGuidance, microgoal, strategicMemory,
     tacticalMemory:{
       recentActions:recent,
       failures:(memory.failures || []).filter(f=>ids.has(f.action)).slice(-3),
-      knownPlaces:(memory.knownPlaces || []).filter(p=>needed.has(p.name) || candidates.some(c=>c.id.startsWith(`revisit_${p.name}_`) || (p.name.includes('portal') && /portal|enter_end|fill_frame/.test(c.id)))).slice(0,4)
+      knownPlaces:(memory.knownPlaces || []).filter(p=>needed.has(p.name) || candidates.some(c=>c.id.startsWith(`move_${p.name}_`) || (p.name.includes('portal') && /portal|enter_end|fill_frame/.test(c.id)))).slice(0,4)
     }
   };
 }

@@ -22,7 +22,7 @@ The bot exposes general Minecraft interaction skills for the agent to compose to
 
 ## What it does not do
 
-Jev does not generate or execute code, use creative mode, issue chat commands, use `/locate`, or control the human player's Minecraft client. It does not promise a reliable completion on arbitrary seeds. Navigation cannot tunnel downward or build vertical towers, and combat and bow aiming are intentionally approximate.
+Jev does not generate or execute code, use creative mode, issue chat commands, use `/locate`, or control the human player's Minecraft client. It does not promise a reliable completion on arbitrary seeds. Pathfinder movement does not destroy terrain or build vertical towers; Jev instead receives explicit bounded excavation actions for opening safe passages. Combat and bow aiming are intentionally approximate.
 
 ## Requirements
 
@@ -135,9 +135,9 @@ Type one of these commands into the running terminal:
 
 Jev now makes hierarchical decisions. It first chooses a general skill, then chooses a grounded target from the current world and inventory. Placement adds a material-selection step before coordinates, and crafting or furnace loading can request a quantity of 1, 2, or 4. A single action may therefore require multiple TypeSafe requests and more latency than the previous single-menu controller.
 
-Skills include mining visible harvestable blocks, crafting any currently available recipe, placing held blocks, equipping, wearing, eating, using held items, activating blocks, loading or collecting furnaces, moving toward observed targets, exploring, collecting drops, fleeing, melee, and approximate bow shots. Targets come from the Minecraft registry, inventory, and observed world. Resource quotas, preferred craft lists, mob-hunting quotas, progression gates, and the portal-building blueprint have been removed. The agent must compose these skills into a plan.
+Skills include mining several visible targets of each type, bounded safe excavation, approaching visible blocks without altering them, crafting any currently available recipe, placing held blocks, equipping, wearing, eating, using held items, activating blocks and non-hostile entities, loading or collecting furnaces, moving toward observed targets, exploring at multiple bearings and ranges, collecting drops, fleeing, melee, and approximate bow shots. Targets come from the Minecraft registry, inventory, and observed world. Resource quotas, preferred craft lists, mob-hunting quotas, progression gates, and the portal-building blueprint have been removed. The agent must compose these skills into a plan.
 
-Mechanics remain bounded: navigation cannot dig, mining avoids underfoot and adjacent-lava hazards, targets are sampled from nearby loaded blocks and entities, placement uses nearby supported spaces, and actions have deadlines. Arbitrary coordinates, generated code, trading, and general container management are not supported. The controller does not currently verify a complete portal-building sequence or dragon kill.
+Mechanics remain bounded: pathfinding cannot dig on its own, excavation opens only a checked two-block-high step with solid footing, mining avoids underfoot and adjacent-lava hazards, targets are sampled from nearby loaded blocks and entities, placement uses nearby supported spaces, and actions have deadlines. Arbitrary coordinates, generated code, trading, and general container management are not supported. The controller does not currently verify a complete portal-building sequence or dragon kill.
 
 ## How it is organized
 
@@ -206,4 +206,4 @@ The full run requires a live Minecraft world, valid credentials, and the configu
 
 No license has been added yet. Until a license is included, assume the repository is all rights reserved.
 
-Exploration uses recent actual arrival positions to avoid reversing into visited areas when an unseen direction is available. If all directions were visited, least-revisited options remain available; explicit movement to remembered targets and fleeing are unaffected. Jev receives a compact loop summary. Repeated interactions with unchanged block/held-item state and no inventory change are temporarily suppressed after two attempts. Navigation checks that its requested goal was actually reached.
+Exploration offers explicit 1, 2, 4, 8, 16, 32, and 64-block destinations across eight bearings, so Jev chooses both direction and travel distance. Short moves use tighter arrival tolerances so they cannot succeed without meaningful movement. Recent actual arrival positions annotate every option with revisit evidence rather than removing routes before Jev can consider them. Explicit movement to visible blocks, remembered targets, and entities remains available. Jev receives a compact loop summary. Repeated interactions with unchanged block/held-item state and no inventory change are temporarily suppressed after two attempts. Navigation checks that its requested goal was actually reached.

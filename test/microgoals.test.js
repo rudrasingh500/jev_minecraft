@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AdvisorPlanner } from '../src/advisor.js';
+import { ADVISOR_INSTRUCTIONS, AdvisorPlanner } from '../src/advisor.js';
 import { completed, reviewReason, validateMicrogoal, adoptMicrogoal } from '../src/microgoals.js';
 const state={dimension:'overworld',position:{x:0,y:65,z:0},inventory:{},equipped:[],observedBlocks:[],objective:'Beat the Ender Dragon'};
 const proposal={description:'Acquire an iron pickaxe',rationale:'Unlock harder resources',steps:['Gather and smelt iron','Craft a pickaxe'],completion:[{kind:'inventory',key:'iron_pickaxe',target:1}]};
@@ -30,10 +30,15 @@ test('many failed approaches trigger review only after sustained evidence',()=>{
  assert.equal(reviewReason(memory,state,start+60000),null);
  assert.equal(reviewReason(memory,state,start+300001),'repeated_action_failures');
 });
-test('rejects the observed wandering and gravel microgoals',()=>{
- for(const completion of [[{kind:'travel_distance',key:'',target:20}],[{kind:'inventory',key:'gravel',target:1}]]) {
-  assert.throws(()=>validateMicrogoal({...proposal,completion},state,registry),/useful readiness/);
- }
+test('a blocked Jev assessment requests replacement advice without waiting for stall timers',()=>{
+ const memory={recent:[]};adoptMicrogoal(memory,proposal,state,'initial_microgoal');
+ memory.plan.acknowledgement={status:'blocked',confidence:0.8};
+ assert.equal(reviewReason(memory,state,memory.plan.selectedAt+1000),'microgoal_blocked');
+});
+test('rejects movement-only completion but permits concrete intermediate resources',()=>{
+ assert.throws(()=>validateMicrogoal({...proposal,completion:[{kind:'travel_distance',key:'',target:20}]},state,registry),/directly observable/);
+ const resources={...registry,itemsByName:{...registry.itemsByName,gravel:{}}};
+ assert.equal(validateMicrogoal({...proposal,completion:[{kind:'inventory',key:'gravel',target:1}]},state,resources).completion[0].key,'gravel');
 });
 test('accepts standard Minecraft namespaced item identifiers',()=>{
  const plan=validateMicrogoal({...proposal,completion:[{kind:'inventory',key:'minecraft:iron_pickaxe',target:1}]},state,registry);
@@ -52,6 +57,9 @@ test('advisor uses the requested model and strict structured responses without s
   assert.equal(url,'https://api.openai.com/v1/responses');
   const body=JSON.parse(options.body);
   assert.equal(body.model,'gpt-5.6-luna');assert.equal(body.store,false);
+  assert.equal(body.reasoning.effort,'high');
+  assert.equal(body.instructions,ADVISOR_INSTRUCTIONS);
+  assert.ok(!body.instructions.includes('executable code'));
   assert.equal(body.text.format.strict,true);assert.ok(!options.body.includes('test-only'));
   return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(proposal)}]}],usage:{input_tokens:10,output_tokens:10}});
  }});
